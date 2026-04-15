@@ -14,7 +14,7 @@ createTerr <- function(Nterr, probQaul = c(0.1, 0.3, 0.6)){
   probFledge[badIndices] <- rbeta(n = length(badIndices), 1, 10)
   dfMatrix <- cbind(terrVec, qualVec, probOcc, probFledge)
   df <- data.frame(dfMatrix)
-  colnames(df) <- c("terr", "quality", "P(occup)", "P(fledge)")
+  colnames(df) <- c("terr", "quality", "Poccup", "Pfledge")
   return(df)
 }
 
