@@ -19,3 +19,4 @@ createTerr <- function(Nterr, probQaul = c(0.1, 0.3, 0.6)){
 }
 
 # Hello
+# Checking from VS
