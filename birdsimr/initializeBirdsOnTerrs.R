@@ -1,8 +1,8 @@
 initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate){
   # Since we are initializing the territories with the first round of birds,
   # we only want to include birds that were spotted in year 1.
-  males <- dfBird[dfBird$Sex == "M" & dfBird$Yr == 1]
-  females <- dfBird[dfBird$Sex == "F" & dfBird$Yr == 1]
+  males <- dfBird[dfBird$Sex == "M" & dfBird$Yr == 1, ]
+  females <- dfBird[dfBird$Sex == "F" & dfBird$Yr == 1, ]
   nMale <- length(males$Sex)
   nFemale <- length(females$Sex)
   nTerr <- length(dfTerr$terr)
@@ -11,19 +11,24 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate){
     stop("Cannot have more male birds or female birds than number of territories")
   }
   males$Terrs <- sample(dfTerr$terr, size = nMale, prob = dfTerr$Poccup)
-  males$Poccup <- dfTerr$Poccup[males$Terrs]
-  males$Pfledge <- dfTerr$fledge[males$Terrs]
-  females <- shuffle(females)
+  # Territory IDs are strings, so we convert to numeric to use for indexing
+  males$Poccup <- as.numeric(dfTerr$Poccup[as.numeric(males$Terrs)])
+  print("Han Solo")
+  males$Pfledge <- as.numeric(dfTerr$Pfledge[as.numeric(males$Terrs)])
+  print("Grogu")
+  females <- females[sample(nrow(females)), ]
+  print("Kylo Ren")
   if (nFemale > nMale){
+    print("Darth Vader")
     # We cannot draw nFemale random bernoulli numbers otherwise we might set
     # some females up to have a mate, but have no male counterpart available
     males$Mated <- rbinom(nMale, 1, pMate)
-    females$Mated <- c(males$Mated, rep(0, nFemale - length(mateFemales$Sex)))
+    females$Mated <- c(males$Mated, rep(0, nFemale - nMale))
     mateFemales <- females[which(females$Mated == 1), ]
     # If the logical below isn't met, this will be a vector of of 0s and 1s that will
     # determine if a female is mated
     unmateFemales <- females[which(females$Mated == 0), ]
-    mateFemales$Terrs <- sample(males$Terrs, size = length(mateFemales), prob = males$Poccup)
+    mateFemales$Terrs <- sample(males$Terrs, size = length(mateFemales$Mated), prob = males$Poccup)
     emptyTerrs <- dfTerr[-which(dfTerr$terr %in% males$Terrs),]
     if (length(unmateFemales$Sex) > length(emptyTerrs$terr)) {
       # You start to get into dicey territory if the logical statement above is 
@@ -54,14 +59,64 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate){
       # Since there are more territories than unmated females, we're just sending the unmated females
       # off to empty territories. There will still be some empty territories unless equality is held in the previous
       # logical statement
-      UnmateFemales$Terrs <- sample(emptyTerrs$terr, length(UnmateFemales$Sex), prob = emptyTerrs$Poccup)
-      newUnmateFemales$Poccup <- dfTerr$Poccup[UnmateFemales$Terrs]
-      newUnmateFemales$Pfledge <- dfTerr$Pfledge[UnmateFemales$Terrs]
+      unmateFemales$Terrs <- sample(emptyTerrs$terr, length(unmateFemales$Sex), prob = emptyTerrs$Poccup)
+      newUnmateFemales$Poccup <- dfTerr$Poccup[unmateFemales$Terrs]
+      newUnmateFemales$Pfledge <- dfTerr$Pfledge[unmateFemales$Terrs]
       df <- rbind(males, mateFemales, newUnmateFemales)
       # will want to add nice column names. However, I think it will be best to see the output before adding this
       return(df)
     }# Close else statement which accounts for the case when n empty terrs <= number of single females
   } # closes if statement which accounts for the case when n female > n male
+  else {
+    print("Luke Skywalker")
+    females$Mated <- rbinom(nFemale, 1, pMate)
+    males$Mated <- c(females$Mated, rep(0, nMale - nFemale))
+    mateFemales <- females[which(females$Mated == 1), ]
+    unmateFemales <- females[which(females$Mated == 0), ]
+    mateFemales$Terrs <- sample(males$Terrs, size = length(mateFemales$Mated), prob = males$Poccup)
+    mateFemales$Poccup <- as.numeric(dfTerr$Poccup[as.numeric(mateFemales$Terrs)])
+    mateFemales$Pfledge <- as.numeric(dfTerr$Pfledge[as.numeric(mateFemales$Terrs)])
+    emptyTerrs <- dfTerr[-which(dfTerr$terr %in% males$Terrs),]
+    # Once again, we need to make sure each unmated female has an empty territory to go to
+    # if not, they're going off to mate 
+    if (length(unmateFemales$Sex) > length(emptyTerrs$terr)) {
+      # You start to get into dicey territory if the logical statement above is 
+      # satisfied. If the logical statement above is satisfied. This means every territory is occupied.
+      # if you introduce more birds next year than those that pass away after year 1, 
+      # the simulation will break. It is recommended that you don't setup a simulation
+      # where we have to consider this case.
+      warning("More remaining females than empty territories. Some more females are being sent to mate.")
+      newUnmateFemales <- unmateFemales[1:length(emptyTerrs$terr), ]
+      # These females will be sent to male occupied territories that don't yet 
+      # have a female
+      newMateFemales <- unmateFemales[(length(emptyTerrs$terr) + 1):length(unmateFemales$Sex), ]
+      lonelyMaleTerrs <- males$Terrs[-which(male$Terrs %in% mateFemales$Terrs)]
+      lonelyPocc <- males$Poccup[-which(male$Terrs %in% mateFemales$Terrs)]
+      newMateFemales$Mated <- rep(1, length(newMateFemales$Mated))
+      newMateFemales$Terrs <- sample(lonelyMaleTerrs, size = length(newMateFemales$Mated, prob = lonelyPocc))
+      mateFemales <- rbind(mateFemales, newMateFemales)
+      mateFemales$Poccup <- dfTerr$Poccup[mateFemales$Terrs]
+      mateFemales$Pfledge <- dfTerr$Pfledge[mateFemales$Terrs]
+      newUnmateFemales$Terrs <- sample(emptyTerrs$terr, length(emptyTerrs$terr), prob = emptyTerrs$Poccup)
+      newUnmateFemales$Poccup <- dfTerr$Poccup[newUnmateFemales$Terrs]
+      newUnmateFemales$Pfledge <- dfTerr$Pfledge[newUnmateFemales$Terrs]
+      df <- rbind(males, mateFemales, newUnmateFemales)
+      # will want to add nice column names. However, I think it will be best to see the output before adding this
+      return(df)
+    }# close if statement that will result in all territories being occupied
+    else {
+      # Since there are more territories than unmated females, we're just sending the unmated females
+      # off to empty territories. There will still be some empty territories unless equality is held in the previous
+      # logical statement
+      unmateFemales$Terrs <- sample(emptyTerrs$terr, length(unmateFemales$Sex), prob = emptyTerrs$Poccup)
+      unmateFemales$Poccup <- as.numeric(dfTerr$Poccup[as.numeric(unmateFemales$Terrs)])
+      unmateFemales$Pfledge <- as.numeric(dfTerr$Pfledge[as.numeric(unmateFemales$Terrs)])
+      males <- males[c("birdID", "Sex", "Lifespan", "Yr", "Mated", "Terrs", "Poccup", "Pfledge")]
+      df <- rbind(males, mateFemales, unmateFemales)
+      # will want to add nice column names. However, I think it will be best to see the output before adding this
+      return(df)
+    } # closes the case when all initial single females can stay single
+  } # closes else when n female <= n male
   # Need to do the same assignment procedure in the case when n female <= n male
   # Do with else statement
   # should be similar to the above
@@ -72,3 +127,7 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate){
 # bird has a mate, and maybe a column that gives the number of 
 # fledge for this first year for pairs. Could also be open to having a separate 
 # function that gives the fledge column. Maybe called something like "makeBabies"
+
+#territories <- createTerr(20)
+#birds <- createBirds(25, Nyr = 10, propNew = 0.4)
+initializeBirdsOnTerr(territories, birds, 0.75)
