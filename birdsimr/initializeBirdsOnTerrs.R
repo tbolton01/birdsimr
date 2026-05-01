@@ -157,7 +157,7 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate){
 # fledge for this first year for pairs. Could also be open to having a separate 
 # function that gives the fledge column. Maybe called something like "makeBabies"
 
-#territories <- createTerr(4)
-#birds <- createBirds(6, Nyr = 1, maleRatio = 0.6, propNew = 1)
-initializeBirdsOnTerr(territories, birds, 0.6)
+territories <- createTerr(100)
+birds <- createBirds(150, Nyr = 10, maleRatio = 0.6, propNew = 0.4)
+BTYdf <- initializeBirdsOnTerr(territories, birds, 0.6)
 
