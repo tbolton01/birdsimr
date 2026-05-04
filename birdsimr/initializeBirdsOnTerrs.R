@@ -1,10 +1,8 @@
 # I wrap as.numeric around all vectors since they're initially strings in the input dfs. 
 # This is probably overkill, but better safe than sorry.
-initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate){
-  
-  males <- dfBird[dfBird$Sex == "M" & dfBird$Yr == 1, ]
-  females <- dfBird[dfBird$Sex == "F" & dfBird$Yr == 1, ]
-  
+initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
+  males <- dfBird[dfBird$Sex == "M" & dfBird$Yr == (year), ]
+  females <- dfBird[dfBird$Sex == "F" & dfBird$Yr == (year), ]
   nMale <- nrow(males)
   nFemale <- nrow(females)
   nTerr <- nrow(dfTerr)
@@ -137,13 +135,11 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate){
       unmateFemales$Poccup <- as.numeric(dfTerr$Poccup[match(unmateFemales$Terrs, dfTerr$terr)])
       unmateFemales$Pfledge <- as.numeric(dfTerr$Pfledge[match(unmateFemales$Terrs, dfTerr$terr)])
     } # closes if statement that assigns single females to terrs when both are available
-    
     finalFemales <- rbind(mateFemales, unmateFemales)
   }
   
   # Update male mating status based on final assignments
   males$Mated[males$Terrs %in% finalFemales$Terrs[finalFemales$Mated == 1]] <- 1
-  
   males <- males[, c("birdID", "Sex", "Lifespan", "Yr", "Mated", "Terrs", "Poccup", "Pfledge")]
   
   df <- rbind(males, finalFemales)
@@ -152,12 +148,12 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate){
 }
 # My goal is to rbind a male df, a mated female df, and an unmated female df
 # The columns will then be Terr (This is the territory that a bird is occupying), 
-# bird ID, sex, yr, p(occ), p(fledge), a cloumn of 0s and 1s that determine if the 
+# bird ID, sex, yr, p(occ), p(fledge), a column of 0s and 1s that determine if the 
 # bird has a mate, and maybe a column that gives the number of 
 # fledge for this first year for pairs. Could also be open to having a separate 
 # function that gives the fledge column. Maybe called something like "makeBabies"
 
 territories <- createTerr(100)
 birds <- createBirds(150, Nyr = 10, maleRatio = 0.6, propNew = 0.4)
-BTYdf <- initializeBirdsOnTerr(territories, birds, 0.6)
+BTYdf <- initializeBirdsOnTerr(territories, birds, 0.6, year = 1)
 
