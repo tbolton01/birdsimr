@@ -64,38 +64,32 @@ createBirds <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew){
   colnames(df) <- c("birdID", "Sex", "Lifespan", "Yr")
   # adding in prob of getting a mate to males
   males <- df[df$Sex == "M",]
-  print(males)
   pMate <- c()
   pFledge <- c()
   uniqueIDs <- unique(males$birdID)
   for (i in seq_len(length(uniqueIDs))) {
     male_i <- males[males$birdID == uniqueIDs[i],]
     span_i <- as.numeric(male_i$Lifespan[1])
-    introYr <- as.numeric(male_i$Yr[1]) - 1
-    print(span_i - introYr)
-    pMate <- c(pMate, rep(rbeta(1, 5, 1), span_i - introYr))
+    numYrs <- length(unique(male_i$Yr))
+    pMate <- c(pMate, rep(rbeta(1, 5, 1), numYrs))
     # if the bird has a short lifespan, it has a low prob of fledge since it is 
     # most likely not a bird of high fitness. 
     if (span_i <= 3) {
-      pFledge <- c(pFledge, rep(rbeta(1, 1, 5), span_i - introYr))
+      pFledge <- c(pFledge, rep(rbeta(1, 1, 5), numYrs))
     }
     if (3 < span_i & span_i <= 6) {
-      pFledge <- c(pFledge, rep(runif(1), span_i - introYr))
+      pFledge <- c(pFledge, rep(runif(1), numYrs))
     }
-    else {
-      pFledge <- c(pFledge, rep(rbeta(1, 5, 1), span_i - introYr))
+    if (span_i > 6) {
+      pFledge <- c(pFledge, rep(rbeta(1, 5, 1), numYrs))
     }
   }#close for loop
-  print(length(pFledge))
-  print(length(pMate))
-  print(nrow(males))
   males <- cbind(males, pMate, pFledge)
-  print("Rey")
   females <- df[df$Sex == "F",]
   pMate <- rep(0, nrow(females))
   pFledge <- rep(0, nrow(females))
   females <- cbind(females, pMate, pFledge)
   df <- rbind(males, females)
-  return(males)
+  return(df)
 }
 createBirds(20, 0.5, 10, 3, 0.3)
