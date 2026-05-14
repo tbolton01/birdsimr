@@ -71,17 +71,19 @@ createBirds <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew){
     male_i <- males[males$birdID == uniqueIDs[i],]
     span_i <- as.numeric(male_i$Lifespan[1])
     numYrs <- length(unique(male_i$Yr))
-    pMate <- c(pMate, rep(rbeta(1, 5, 1), numYrs))
     # if the bird has a short lifespan, it has a low prob of fledge since it is 
     # most likely not a bird of high fitness. 
     if (span_i <= 3) {
-      pFledge <- c(pFledge, rep(rbeta(1, 1, 5), numYrs))
+      pFledge <- c(pFledge, rep(rbeta(1, 1, 3), numYrs))
+      pMate <- c(pMate, rep(runif(1), numYrs))
     }
     if (3 < span_i & span_i <= 6) {
       pFledge <- c(pFledge, rep(runif(1), numYrs))
+      pMate <- c(pMate, rep(rbeta(1, 4, 1), numYrs))
     }
     if (span_i > 6) {
-      pFledge <- c(pFledge, rep(rbeta(1, 5, 1), numYrs))
+      pMate <- c(pMate, rep(rbeta(1, 5, 1), numYrs))
+      pFledge <- c(pFledge, rep(rbeta(1, 3, 1), numYrs))
     }
   }#close for loop
   males <- cbind(males, pMate, pFledge)

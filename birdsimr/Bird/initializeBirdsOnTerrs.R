@@ -20,9 +20,7 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
   nPairable <- min(nMale, nFemale)
   # Looking at the min above allows us not to deal with all of the nested if statements above
   malesMate <- rep(0, nrow(males))
-  for (i in seq_len(length(malesMate))) {
-    malesMate[i] <- rbinom(1, 1, as.numeric(males$pMate[i]))
-  }
+  malesMate <- rbinom(nMale, 1, as.numeric(males$pMate))
   malesMate <- sort(malesMate, decreasing = TRUE)
   males$Mated <- rep(0, nMale)
   females$Mated <- rep(0, nFemale)
@@ -39,11 +37,9 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
     mateFemales$Terrs <- as.numeric(sample(mateMales$Terrs,
                                            size = nrow(mateFemales),
                                            replace = FALSE))
-    mateFemales$pFledge <- as.numeric(mateMales$pFledge[match(mateFemales$Terrs, mateMales$terr)])
   } # Closes if statement where we can use sample
   else {
     mateFemales$Terrs <- mateMales$Terrs
-    mateFemales$pFledge <- as.numeric(mateMales$pFledge[match(mateFemales$Terrs, mateMales$terr)])
   } # Closes else statement where we cant use sample
   
   # Find territories without males on them
@@ -71,7 +67,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
     
     # Assign extra females to single males
     if (nrow(newMateFemales) > 0) {
-      print("Paul")
       lonelyMaleTerrs <- as.numeric(males$Terrs[!(males$Terrs %in% mateFemales$Terrs)])
       # If we need more females to mate but all males have a mate, then we run this error. 
       # I don't think we need this, but it's an extra safeguard
@@ -82,14 +77,12 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
       if (length(lonelyMaleTerrs) == 1) {
         newMateFemales$Mated <- 1
         newMateFemales$Terrs <- as.numeric(lonelyMaleTerrs)
-        newMateFemales$pFledge <- as.numeric(males$pFledge[match(newMateFemales$Terrs, males$terr)])
       } # Closes if statement when there is only one single male
       else {
         newMateFemales$Mated <- 1
         newMateFemales$Terrs <- as.numeric(sample(lonelyMaleTerrs,
                                                   size = nrow(newMateFemales),
                                                   replace = FALSE))
-        newMateFemales$pFledge <- as.numeric(males$pFledge[match(newMateFemales$Terrs, males$terr)])
       } # closes the case when there are multiple single males
       
       mateFemales <- rbind(mateFemales, newMateFemales)
@@ -101,7 +94,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
       newUnmateFemales$Terrs <- as.numeric(sample(emptyTerrs$terr,
                                                   size = nrow(newUnmateFemales),
                                                   replace = FALSE))
-      newUnmateFemales$pFledge <- as.numeric(dfTerr$pFledge[match(newUnmateFemales$Terrs, dfTerr$terr)])
     }# closes statement that assigns single females territories to be alone.
     # want to make sure there are no single females if nEmpty is 0
     # nEmpty is the number of territories unoccupied by a male.
