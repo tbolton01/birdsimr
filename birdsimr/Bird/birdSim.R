@@ -1,3 +1,8 @@
+# files needed to run the simulation 
+files <- c("birdFunc.R", "createTerr.R", "initializeBirdsOnTerrs.R", 
+           "makeFledge.R", "newMate.R")
+# load in the functions from the files. 
+lapply(files, source)
 terrSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # args for bird dataset
                     Nterr, #arg for terr dataset
                     pFidel = 0, pObs = 1, # args still needed for new mate function

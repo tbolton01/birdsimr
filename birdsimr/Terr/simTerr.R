@@ -1,3 +1,8 @@
+# files needed to run the simulation 
+files <- c("birdFunc.R", "createTerr.R", "initializeBirdsOnTerrs.R", 
+           "makeFledge.R", "newMate.R")
+# load in the functions from the files. 
+lapply(files, source)
 terrSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # args for bird dataset
                      Nterr, probQual = c(0.1, 0.3, 0.6), #args for terr dataset
                      pMate, # The only externel arg needed for initialize bird on terr function
