@@ -1,6 +1,8 @@
 # I wrap as.numeric around all vectors since they're initially strings in the input dfs. 
 # This is probably overkill, but better safe than sorry.
 initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
+  fledge_year <- ((1/4) * sin(pi * year)) + (3/4)
+  dfTerr$Pfledge <- fledge_year * as.numeric(dfTerr$Pfledge)
   males <- dfBird[dfBird$Sex == "M" & dfBird$Yr == (year), ]
   females <- dfBird[dfBird$Sex == "F" & dfBird$Yr == (year), ]
   nMale <- nrow(males)
@@ -10,7 +12,7 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
   if (nFemale > nTerr | nMale > nTerr) {
     stop("Cannot have more birds than territories")
   }
-  
+
   # Assign males to territories
   males$Terrs <- as.numeric(sample(dfTerr$terr, size = nMale, prob = dfTerr$Poccup))
   males$Poccup <- as.numeric(dfTerr$Poccup[match(males$Terrs, dfTerr$terr)])
@@ -19,20 +21,23 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
   # Shuffle females
   females <- females[sample(nrow(females)), ]
   
+  
   # Assign mating status
   nPairable <- min(nMale, nFemale)
   # Looking at the min above allows us not to deal with all of the nested if statements above
   mateDraw <- rbinom(nPairable, 1, pMate)
   
-  males$Mated <- 0
-  females$Mated <- 0
+  males$Mated <- rep(0, nrow(males))
+  females$Mated <- rep(0, nrow(females))
   
   males$Mated[1:nPairable] <- mateDraw
   females$Mated[1:nPairable] <- mateDraw
+  print("Han")
   
   mateFemales <- females[females$Mated == 1, , drop = FALSE]
   unmateFemales <- females[females$Mated == 0, , drop = FALSE]
   mateMales <- males[males$Mated == 1, , drop = FALSE]
+  print("Kylo Ren")
   # Assign mated females to male territories (no replacement)
   if (nrow(mateFemales) > 1) {
     mateFemales$Terrs <- as.numeric(sample(mateMales$Terrs,
@@ -74,7 +79,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
     
     # Assign extra females to single males
     if (nrow(newMateFemales) > 0) {
-      print("Paul")
       lonelyMaleTerrs <- as.numeric(males$Terrs[!(males$Terrs %in% mateFemales$Terrs)])
       lonelyPocc <- as.numeric(males$Poccup[!(males$Terrs %in% mateFemales$Terrs)])
       print(lonelyMaleTerrs)
@@ -143,7 +147,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
   males <- males[, c("birdID", "Sex", "Lifespan", "Yr", "Mated", "Terrs", "Poccup", "Pfledge")]
   
   df <- rbind(males, finalFemales)
-  
   return(df)
 }
 # My goal is to rbind a male df, a mated female df, and an unmated female df
@@ -153,7 +156,7 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
 # fledge for this first year for pairs. Could also be open to having a separate 
 # function that gives the fledge column. Maybe called something like "makeBabies"
 
-territories <- createTerr(100)
-birds <- createBirds(150, Nyr = 10, maleRatio = 0.6, propNew = 0.4)
-BTYdf <- initializeBirdsOnTerr(territories, birds, 0.6, year = 1)
+territories <- createTerr(50)
+birds <- createBirds(20, Nyr = 10, maleRatio = 0.6, propNew = 0.4)
+initializeBirdsOnTerr(territories, birds, 0.6, year = 1)
 

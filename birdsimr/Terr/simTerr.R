@@ -24,7 +24,7 @@ terrSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # arg
 }
 Nbird <- 20
 maleRatio <- 0.5
-Nyr <- 5
+Nyr <- 4
 avgLifespan <- 3
 propNew <- 0.3
 Nterr <- 40

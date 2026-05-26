@@ -3,7 +3,7 @@ files <- c("birdFunc.R", "createTerr.R", "initializeBirdsOnTerrs.R",
            "makeFledge.R", "newMate.R")
 # load in the functions from the files. 
 lapply(files, source)
-terrSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # args for bird dataset
+birdSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # args for bird dataset
                     Nterr, #arg for terr dataset
                     pFidel = 0, pObs = 1, # args still needed for new mate function
                     maxFledge # argument needed for the make fledge function
@@ -30,4 +30,4 @@ Nterr <- 40
 pFidel <- 0.5
 pObs = 0.95
 maxFledge = 4
-terrSim(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, Nterr, pFidel = 0, pObs = 1, maxFledge)
+birdSim(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, Nterr, pFidel = 0, pObs = pObs, maxFledge)
