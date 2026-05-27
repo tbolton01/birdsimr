@@ -66,7 +66,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
   occupiedTerrs <- males$Terrs
   emptyTerrs <- dfTerr[!(dfTerr$terr %in% occupiedTerrs), , drop = FALSE]
   # Handle unmated females
-  print("John")
   if (nrow(unmateFemales) > nrow(emptyTerrs)) {
     # If the logical statement above is satisfied. This means every territory is occupied.
     # if you introduce more birds next year than those that pass away after year 1, 

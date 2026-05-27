@@ -13,5 +13,4 @@ makeFledge <- function(BTYdf, maxFledge) {
   dfNew <- rbind(matedMales, matedFemales, unmated)
   return(dfNew)
 }
-BTYdf <- makeFledge(BTYdf, 4)
 

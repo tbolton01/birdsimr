@@ -36,4 +36,3 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pObs = 1) {
   df <- rbind(matedBird, newMate)
   return(df)
 }
-newMate(BTYdf, birds, territories, pFidel = 0.8, year = 1)
