@@ -12,7 +12,30 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
   if (nFemale > nTerr | nMale > nTerr) {
     stop("Cannot have more birds than territories")
   }
-
+  if (nMale > 0 & nFemale == 0) {
+    males$Terrs <- as.numeric(sample(dfTerr$terr, size = nMale, prob = dfTerr$Poccup))
+    males$Poccup <- as.numeric(dfTerr$Poccup[match(males$Terrs, dfTerr$terr)])
+    males$Pfledge <- as.numeric(dfTerr$Pfledge[match(males$Terrs, dfTerr$terr)])
+    males$Mated <- rep(0, nMale)
+    males <- males[, c("birdID", "Sex", "Lifespan", "Yr", "Mated", "Terrs", "Poccup", "Pfledge")]
+    return(males)
+  }
+  if (nMale == 0 & nFemale > 0) {
+    females$Terrs <- as.numeric(sample(dfTerr$terr, size = nFemale, prob = dfTerr$Poccup))
+    females$Poccup <- as.numeric(dfTerr$Poccup[match(females$Terrs, dfTerr$terr)])
+    females$Pfledge <- as.numeric(dfTerr$Pfledge[match(females$Terrs, dfTerr$terr)])
+    females$Mated <- rep(0, nFemale)
+    females <- females[, c("birdID", "Sex", "Lifespan", "Yr", "Mated", "Terrs", "Poccup", "Pfledge")]
+    return(females)
+  }
+  # Conditionals to make sure that we have birds and territories so that the 
+  # simulation can go on.
+  if (nMale == 0 & nFemale == 0) {
+    stop("No birds to place on territories")
+  }
+  if (nTerr == 0) {
+    stop("No territories to place birds on.")
+  }
   # Assign males to territories
   males$Terrs <- as.numeric(sample(dfTerr$terr, size = nMale, prob = dfTerr$Poccup))
   males$Poccup <- as.numeric(dfTerr$Poccup[match(males$Terrs, dfTerr$terr)])

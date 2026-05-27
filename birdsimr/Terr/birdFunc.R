@@ -14,14 +14,14 @@ createBirds <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew){
   for (i in seq_len(Nyr)){
     # if we observe 0 birds the spans vector will be empty and break the logical
     # statement that involves its jth component
-    if (floor(length(birdVec) * propNew) < 1) {
+    if (floor(length(birdVec) * propNew[i]) < 1) {
       break
     }
     # here we sample and get a vector of birds we FIRST see in year i
     # if their lifespan is bigger than 1, we'll see them again next year as long
     # as i neq Nyr. However , the j loop runs out the rest of the years they are
     # alive
-    birds <- sort(sample(birdVec, floor(length(birdVec) * propNew)))
+    birds <- sort(sample(birdVec, floor(length(birdVec) * propNew[i])))
     # Below are vectors with basic information corresponding to the birds
     # in the vector above
     spans <- lifespanVec[which(birdVec %in% birds)]

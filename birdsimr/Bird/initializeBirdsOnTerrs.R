@@ -1,14 +1,35 @@
 # I wrap as.numeric around all vectors since they're initially strings in the input dfs. 
 # This is probably overkill, but better safe than sorry.
 initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
+  fledge_year <- ((1/4) * sin(pi * year)) + (3/4)
+  dfBird$pFledge <- fledge_year * as.numeric(dfBird$pFledge)
   males <- dfBird[dfBird$Sex == "M" & dfBird$Yr == (year), ]
   females <- dfBird[dfBird$Sex == "F" & dfBird$Yr == (year), ]
   nMale <- nrow(males)
   nFemale <- nrow(females)
   nTerr <- nrow(dfTerr)
-  
+  # Conditionals to make sure that we have birds and territories so that the 
+  # simulation can go on.
+  if (nMale == 0 & nFemale == 0) {
+    stop("No birds to place on territories")
+  }
+  if (nTerr == 0) {
+    stop("No territories to place birds on.")
+  }
   if (nFemale > nTerr | nMale > nTerr) {
     stop("Cannot have more birds than territories")
+  }
+  if (nMale > 0 & nFemale == 0) {
+    males$Terrs <- as.numeric(sample(dfTerr$terr, size = nMale))
+    males$Mated <- rep(0, nMale)
+    males <- males[, c("birdID", "Sex", "Lifespan", "Yr", "Mated", "Terrs", "pMate", "pFledge")]
+    return(males)
+  }
+  if (nMale == 0 & nFemale > 0) {
+    females$Terrs <- as.numeric(sample(dfTerr$terr, size = nFemale))
+    females$Mated <- rep(0, nFemale)
+    females <- females[, c("birdID", "Sex", "Lifespan", "Yr", "Mated", "Terrs", "pMate", "pFledge")]
+    return(females)
   }
   # Assign males to territories
   males$Terrs <- as.numeric(sample(dfTerr$terr, size = nMale))
@@ -21,7 +42,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
   # Looking at the min above allows us not to deal with all of the nested if statements above
   malesMate <- rep(0, nrow(males))
   malesMate <- rbinom(nMale, 1, as.numeric(males$pMate))
-  malesMate <- sort(malesMate, decreasing = TRUE)
   males$Mated <- rep(0, nMale)
   females$Mated <- rep(0, nFemale)
   
@@ -46,6 +66,7 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
   occupiedTerrs <- males$Terrs
   emptyTerrs <- dfTerr[!(dfTerr$terr %in% occupiedTerrs), , drop = FALSE]
   # Handle unmated females
+  print("John")
   if (nrow(unmateFemales) > nrow(emptyTerrs)) {
     # If the logical statement above is satisfied. This means every territory is occupied.
     # if you introduce more birds next year than those that pass away after year 1, 
@@ -130,7 +151,7 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
 # fledge for this first year for pairs. Could also be open to having a separate 
 # function that gives the fledge column. Maybe called something like "makeBabies"
 
-territories <- createTerr(100)
-birds <- createBirds(40, Nyr = 10, maleRatio = 0.45, propNew = 0.4)
-BTYdf <- initializeBirdsOnTerr(territories, birds, year = 1)
+territories <- createTerr(5)
+#birds <- createBirds(8, Nyr = 1, maleRatio = 0.6, propNew = 1)
+initializeBirdsOnTerr(territories, birds, year = 1)
 
