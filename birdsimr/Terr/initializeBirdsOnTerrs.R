@@ -55,12 +55,10 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
   
   males$Mated[1:nPairable] <- mateDraw
   females$Mated[1:nPairable] <- mateDraw
-  print("Han")
   
   mateFemales <- females[females$Mated == 1, , drop = FALSE]
   unmateFemales <- females[females$Mated == 0, , drop = FALSE]
   mateMales <- males[males$Mated == 1, , drop = FALSE]
-  print("Kylo Ren")
   # Assign mated females to male territories (no replacement)
   if (nrow(mateFemales) > 1) {
     mateFemales$Terrs <- as.numeric(sample(mateMales$Terrs,
@@ -180,6 +178,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
 # function that gives the fledge column. Maybe called something like "makeBabies"
 
 territories <- createTerr(50)
-birds <- createBirds(20, Nyr = 10, maleRatio = 0.6, propNew = 0.4)
-initializeBirdsOnTerr(territories, birds, 0.6, year = 1)
+birds <- createBirds(100, Nyr = 10, maleRatio = 0.6, propNew = rep(0.4, 10))
+BTYdf <- initializeBirdsOnTerr(territories, birds, 0.6, year = 1)
 
