@@ -224,6 +224,8 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
     }
   }
   BTYdf <- BTYdf[, -c(9, 10)]
+  fledge_year <- ((1/4) * sin((pi/2) * (year + 1))) + (3/4)
+  BTYdf$Pfledge <- fledge_year * as.numeric(BTYdf$Pfledge)
   return(BTYdf)
 }
 set.seed(2187)

@@ -1,7 +1,7 @@
 # I wrap as.numeric around all vectors since they're initially strings in the input dfs. 
 # This is probably overkill, but better safe than sorry.
 initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
-  fledge_year <- ((1/4) * sin(pi * year)) + (3/4)
+  fledge_year <- ((1/4) * sin((pi/2) * year)) + (3/4)
   dfTerr$Pfledge <- fledge_year * as.numeric(dfTerr$Pfledge)
   males <- dfBird[dfBird$Sex == "M" & dfBird$Yr == (year), ]
   females <- dfBird[dfBird$Sex == "F" & dfBird$Yr == (year), ]

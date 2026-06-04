@@ -26,9 +26,7 @@ terrSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # arg
     birdTerrY <- dfSim[dfSim$Yr == i, ][, -9]
     birdTerrY <- newMate(birdTerrY, dfBird, dfTerr, pFidel, i, pMate, pDispP, 
                          pDispM, pDispF)
-    print("gravity")
     birdTerrY <- makeFledge(birdTerrY, maxFledge)
-    print("Kylo Ren")
     dfSim <- rbind(dfSim, birdTerrY)
   }
   return(dfSim)
