@@ -1,38 +1,191 @@
-newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pObs = 1) {
+newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pDispP = 0.05, 
+                    pDispM = 0.8, pDispF = 0.8) {
+  males <- dfBird[dfBird$Sex == "M" & dfBird$Yr == (year + 1), ]
+  females <- dfBird[dfBird$Sex == "F" & dfBird$Yr == (year + 1), ]
+  nMale <- nrow(males)
+  nFemale <- nrow(females)
+  nTerr <- nrow(dfTerr)
+  if (nFemale > nTerr | nMale > nTerr) {
+    stop("Cannot have more birds than territories")
+  }
   # gives df of birds available for the next year
   birdYear <- dfBird[dfBird$Yr == (year + 1),]
-  # Removing some birds for the year randomly to replicate that 
-  # sometimes birds aren't seen in a particular year but are still alive
-  birdYear$Obs <- rbinom(length(birdYear$Yr), 1, pObs)
-  #Removing all birds that weren't seen
-  birdYear <- birdYear[birdYear$Obs == 1, ]
   # were going to throw out birds that either are dead or wern't observed.
   BTYdf <- BTYdf[which(BTYdf$birdID %in% birdYear$birdID), ]
-  matedMales <- BTYdf[BTYdf$Mated == 1 & BTYdf$Sex == "M", ]
-  matedFemales <- BTYdf[BTYdf$Mated == 1 & BTYdf$Sex == "F", ]
+  BTYdf$Yr <- rep(year + 1, nrow(BTYdf))
+  oldMatedMales <- BTYdf[BTYdf$Mated == 1 & BTYdf$Sex == "M", ]
+  oldMatedFemales <- BTYdf[BTYdf$Mated == 1 & BTYdf$Sex == "F", ]
   # We now need to subset the groups above and make sure they're mate is still alive
-  matedFemales <- matedFemales[which(matedFemales$Terrs %in% matedMales$Terrs), ]
-  matedMales <- matedMales[which(matedMales$Terrs %in% matedFemales$Terrs), ]
+  matedFemales <- oldMatedFemales[which(oldMatedFemales$Terrs %in% oldMatedMales$Terrs), ]
+  matedMales <- oldMatedMales[which(oldMatedMales$Terrs %in% oldMatedFemales$Terrs), ]
   # We now have 2 datasets will all remaining mated males and females
-  # If the mated column becomes a 0, the female will be eligble for a new mate.
+  # If the mated column becomes a 0, the female will be eligible for a new mate.
   matedFemales$Mated <- rbinom(length(matedFemales$Mated), 1, pFidel)
   # Here is a df with the females who will stay with their mate
-  matedFemales <- matedFemales[matedFemales$Mated == 1, ]
+  matedFemales <- matedFemales[which(matedFemales$Mated == 1), ]
   # This line removes the males from the mated males who were separated from 
-  # their mate
+  # their mate 
   matedMales <- matedMales[which(matedMales$Terrs %in% matedFemales$Terrs),]
   matedBird <- rbind(matedMales, matedFemales)
-  # We now have the final list of birds available for the year
-  birdYear <- birdYear[which(!birdYear$birdID %in% matedBird$birdID), ]
-  birdYear <- birdYear[, -7]
-  dfTerr <- dfTerr[which(!as.numeric(dfTerr$terr) %in% as.numeric(matedBird$Terrs)), ]
-  dfTerr <- data.frame(dfTerr)
-  colnames(dfTerr) <- c("terr")
-  newMate <- initializeBirdsOnTerr(dfTerr, birdYear, year = (year + 1))
-  
-  newMate$Fledge <- rep(0, length(newMate$Yr))
-  matedBird$Fledge <- rep(0, length(matedBird$Yr))
-  matedBird$Yr <- as.numeric(matedBird$Yr) + 1
-  df <- rbind(matedBird, newMate)
-  return(df)
+  BTYdf <- BTYdf[which(!BTYdf$birdID %in% matedBird$birdID), ]
+  BTYdf$Mated <- rep(0, nrow(BTYdf))
+  BTYdf <- rbind(BTYdf, matedBird)
+  singleMales <- BTYdf[BTYdf$Sex == "M" & BTYdf$Mated == 0, ]
+  singleFemales <- BTYdf[BTYdf$Sex == "F" & BTYdf$Mated == 0, ]
+  matedMales$disp <- rbinom(nrow(matedMales), 1, pDispP)
+  matedFemales$disp <- as.numeric(matedMales$disp[match(matedFemales$Terrs, matedMales$Terrs)])
+  singleMales$disp <- rbinom(nrow(singleMales), 1, pDispM)
+  singleFemales$disp <- rbinom(nrow(singleFemales), 1, pDispF)
+  if (nrow(singleMales[which(singleMales$Terrs %in% oldMatedMales$Terrs), ]) > 0) {
+    singleMales[which(singleMales$Terrs %in% oldMatedMales$Terrs), ]$disp <- 1
+  }
+  if (nrow(singleFemales[which(singleFemales$Terrs %in% oldMatedFemales$Terrs), ]) > 0) {
+    singleFemales[which(singleFemales$Terrs %in% oldMatedFemales$Terrs), ]$disp <- 1
+  }
+  BTYdf <- rbind(matedMales, matedFemales, singleMales, singleFemales)
+  BTYdf$oldTerrs <- BTYdf$Terrs
+  BTYdf[BTYdf$disp == 0, ]$Terrs <- BTYdf[BTYdf$disp == 0, ]$oldTerrs
+  BTYdf[BTYdf$disp == 1, ]$Terrs <- NA
+  newBirds <- birdYear[which(!birdYear$birdID %in% BTYdf$birdID), ]
+  newBirds$Mated <- 0
+  newBirds$Terrs <- NA
+  newBirds$disp <- 1
+  newBirds$oldTerrs <- 0
+  BTYdf <- rbind(BTYdf, newBirds)
+  maleSingDisp <- BTYdf[BTYdf$Sex == "M" & BTYdf$Mated == 0 & BTYdf$disp == 1, ]
+  femaleSingDisp <- BTYdf[BTYdf$Sex == "F" & BTYdf$Mated == 0 & BTYdf$disp == 1, ]
+  # We first assign pairs to empty territories
+  if(sum(BTYdf[BTYdf$Mated == 1, ]$disp) > 0) {
+    emptyTerrs <- dfTerr[which(!dfTerr$terr %in% BTYdf$Terrs), ]
+    maleMatedDisp <- BTYdf[BTYdf$Sex == "M" & BTYdf$Mated == 1 & BTYdf$disp == 1, ]
+    maleMatedDisp$Terrs <- sample(emptyTerrs, nrow(maleMatedDisp), 
+                                  replace = FALSE)
+    femaleMatedDisp <- BTYdf[BTYdf$Sex == "F" & BTYdf$Mated == 1 & BTYdf$disp == 1, ]
+    femaleMatedDisp$Terrs <- maleMatedDisp$Terrs[match(maleMatedDisp$oldTerrs, femaleMatedDisp$oldTerrs)]
+    BTYdf <- na.omit(BTYdf)
+    BTYdf <- rbind(BTYdf, maleMatedDisp, femaleMatedDisp)
+  }
+  # we now send the single males off to territories that have dispersed or were introduced this year
+  if(nrow(maleSingDisp) > 0) {
+    BTYdf <- na.omit(BTYdf)
+    emptyTerrs <- dfTerr[which(!dfTerr$terr %in% BTYdf$Terrs), ]
+    sfTerrs <- dfTerr[which(dfTerr$terr %in% BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0 & BTYdf$Mated == 0, ]$Terrs), ]
+    availTerrs <- c(emptyTerrs, sfTerrs)
+    maleSingDisp$Terrs <- sample(x = availTerrs, size = nrow(maleSingDisp))
+    if (nrow(maleSingDisp[which(maleSingDisp$Terrs %in% sfTerrs), ]) > 0) {
+      females <- BTYdf[BTYdf$Sex == "F", ]
+      maleSingDisp[which(maleSingDisp$Terrs %in% females$Terrs), ]$Mated <- 1
+      nonDispFemales <- BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0, ]
+      BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0 & BTYdf$Mated == 0, ]$Mated[which(sfTerrs %in% maleSingDisp$Terrs)] <- 1
+    }
+    BTYdf <- rbind(BTYdf, maleSingDisp)
+  }
+  if(nrow(femaleSingDisp) > 0) {
+    BTYdf <- na.omit(BTYdf)
+    emptyTerrs <- dfTerr[which(!dfTerr$terr %in% BTYdf$Terrs), ]
+    smTerrs <- dfTerr[which(dfTerr$terr %in% BTYdf[BTYdf$Sex == "M" & BTYdf$Mated == 0, ]$Terrs), ]
+    sMales <- BTYdf[BTYdf$Sex == "M" & BTYdf$Mated == 0, ]
+    nsMales <- nrow(sMales)
+    ndsFemales <- nrow(femaleSingDisp)
+    nPairable <- min(nsMales, ndsFemales)
+    sMales <- sMales[sample(nsMales), ]
+    if (nPairable > 0) {
+      mateDraw <- rbinom(nPairable, 1, as.numeric(sMales$pMate))
+      
+      sMales$Mated[1:nPairable] <- mateDraw
+      femaleSingDisp$Mated[1:nPairable] <- mateDraw
+      
+      mateFemales <- femaleSingDisp[femaleSingDisp$Mated == 1, , drop = FALSE]
+      unmateFemales <- femaleSingDisp[femaleSingDisp$Mated == 0, , drop = FALSE]
+      mateMales <- sMales[sMales$Mated == 1, , drop = FALSE]
+      # Assign mated females to male territories (no replacement)
+      if (nrow(mateFemales) > 1) {
+        mateFemales$Terrs <- as.numeric(sample(mateMales$Terrs,
+                                               size = nrow(mateFemales),
+                                               replace = FALSE))
+      } # Closes if statement where we can use sample
+      else {
+        mateFemales$Terrs <- mateMales$Terrs
+      }
+    }
+    else {
+      femaleSingDisp$Mated <- 0
+      mateFemales <- femaleSingDisp[femaleSingDisp$Mated == 1, , drop = FALSE]
+      unmateFemales <- femaleSingDisp[femaleSingDisp$Mated == 0, , drop = FALSE]
+    }
+    emptyTerrs <- dfTerr[which(!dfTerr$terr %in% BTYdf$Terrs), ]
+    # Handle unmated females
+    if (nrow(unmateFemales) > length(emptyTerrs)) {
+      # If the logical statement above is satisfied. This means every territory is occupied.
+      # if you introduce more birds next year than those that pass away after year 1, 
+      # the simulation will break. It is recommended that you don't setup a simulation
+      # where we have to consider this case.
+      
+      warning("More unmated females than empty territories. Sending extras to mate.")
+      
+      # Split females
+      nEmpty <- length(emptyTerrs)
+      # This will give a nonempty df if nEmpty is 0. We fix this near the bottom
+      newUnmateFemales <- unmateFemales[1:nEmpty, , drop = FALSE]
+      
+      if (nEmpty < nrow(unmateFemales)) {
+        newMateFemales <- unmateFemales[(nEmpty + 1):nrow(unmateFemales), , drop = FALSE]
+      } else {
+        newMateFemales <- unmateFemales[0, , drop = FALSE]
+      }
+      
+      # Assign extra females to single males
+      if (nrow(newMateFemales) > 0) {
+        lonelyMaleTerrs <- as.numeric(sMales$Terrs[!(sMales$Terrs %in% mateFemales$Terrs)])
+        # If we need more females to mate but all males have a mate, then we run this error. 
+        # I don't think we need this, but it's an extra safeguard
+        if (length(lonelyMaleTerrs) == 0) {
+          stop("All males have mated, but we still need a female to mate.")
+        } # closes if statement for the error
+        # Can't use sample if there is only one observation
+        if (length(lonelyMaleTerrs) == 1) {
+          newMateFemales$Mated <- 1
+          newMateFemales$Terrs <- as.numeric(lonelyMaleTerrs)
+        } # Closes if statement when there is only one single male
+        else {
+          newMateFemales$Mated <- 1
+          newMateFemales$Terrs <- as.numeric(sample(lonelyMaleTerrs,
+                                                    size = nrow(newMateFemales),
+                                                    replace = FALSE))
+        } # closes the case when there are multiple single males
+        
+        mateFemales <- rbind(mateFemales, newMateFemales)
+      }
+      
+      # Assign remaining unmated females to empty territories
+      if (nrow(newUnmateFemales) > 0 && length(emptyTerrs) > 0) {
+        newUnmateFemales$Terrs <- as.numeric(sample(emptyTerrs,
+                                                    size = nrow(newUnmateFemales),
+                                                    replace = FALSE))
+      }# closes statement that assigns single females territories to be alone.
+      # want to make sure there are no single females if nEmpty is 0
+      # nEmpty is the number of territories unoccupied by a male.
+      if (nEmpty == 0) {
+        newUnmateFemales <- mateFemales[0, , drop = FALSE]
+      } # closes if statement for when nEmpty is 0
+      finalFemales <- rbind(mateFemales, newUnmateFemales)
+      BTYdf <- rbind(BTYdf, finalFemales)
+      BTYdf[BTYdf$Sex == "M",]$Mated[BTYdf[BTYdf$Sex == "M",]$Terrs %in% finalFemales$Terrs[finalFemales$Mated == 1]] <- 1
+    } else {
+      # You want the simulation to run the code below. This is the case where
+      # there are enough territories for all of the single and mated birds
+      if (nrow(unmateFemales) > 0 && length(emptyTerrs) > 0) {
+        unmateFemales$Terrs <- as.numeric(sample(emptyTerrs,
+                                                 size = nrow(unmateFemales),,
+                                                 replace = FALSE))
+      } # closes if statement that assigns single females to terrs when both are available
+      finalFemales <- rbind(mateFemales, unmateFemales)
+      BTYdf <- rbind(BTYdf, finalFemales)
+      BTYdf[BTYdf$Sex == "M",]$Mated[which(BTYdf[BTYdf$Sex == "M",]$Terrs %in% finalFemales$Terrs[finalFemales$Mated == 1])] <- 1
+    }
+  }
+  BTYdf <- BTYdf[, -c(9, 10)]
+  fledge_year <- ((1/4) * sin((pi/2) * (year + 1))) + (3/4)
+  BTYdf$pFledge <- fledge_year * as.numeric(BTYdf$pFledge)
+  return(BTYdf)
 }

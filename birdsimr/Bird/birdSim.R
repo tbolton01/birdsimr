@@ -5,8 +5,9 @@ files <- c("birdFunc.R", "createTerr.R", "initializeBirdsOnTerrs.R",
 lapply(files, source)
 birdSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # args for bird dataset
                     Nterr, #arg for terr dataset
-                    pFidel = 0, pObs = 1, # args still needed for new mate function
-                    maxFledge # argument needed for the make fledge function
+                    pFidel = 0, pDispP = 0.05, pDispM = 0.8, pDispF = 0.8,# args still needed for new mate function
+                    maxFledge = 4, # argument needed for the make fledge function
+                    pObsM = 1, pObsF = 1
 ) {
   dfTerr <- createTerr(Nterr)
   dfBird <- createBirds(Nbird, maleRatio, Nyr, avgLifespan, propNew)
@@ -20,8 +21,17 @@ birdSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # arg
       return(dfSim)
     }
     birdTerrY <- dfSim[dfSim$Yr == i, ]
-    birdTerrY <- newMate(birdTerrY, dfBird, dfTerr, pFidel, i, pObs)
+    birdTerrY <- birdTerrY[,-9]
+    birdTerrY <- newMate(birdTerrY, dfBird, dfTerr, pFidel, i, pDispP, pDispM, pDispF)
     birdTerrY <- makeFledge(birdTerrY, maxFledge)
+    males <- birdTerrY[birdTerrY$Sex == "M", ]
+    females <- birdTerrY[birdTerrY$Sex == "F", ]
+    males$obs <- rbinom(nrow(males), 1, pObsM)
+    females$obs <- rbinom(nrow(females), 1, pObsF)
+    males <- males[males$obs == 1, ]
+    females <- females[females$obs == 1, ]
+    birdTerrY <- rbind(females, males)
+    birdTerrY <- birdTerrY[,-10]
     dfSim <- rbind(dfSim, birdTerrY)
   }
   return(dfSim)
@@ -33,6 +43,11 @@ avgLifespan <- 3
 propNew <- rep(0.5, Nyr)
 Nterr <- 40
 pFidel <- 0.5
-pObs = 0.95
+pDispP = 0.05
+pDispM = 0.8 
+pDispF = 0.8
 maxFledge = 4
-birdSim(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, Nterr, pFidel = 0, pObs = pObs, maxFledge)
+pObsM = 1
+pObsF = 1
+birdSim(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, Nterr, pFidel = 0, 
+        pDispP = 0.05, pDispM = 0.8, pDispF = 0.8, maxFledge = 4, pObsM = 1, pObsF = 1)

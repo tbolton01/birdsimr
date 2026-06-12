@@ -56,9 +56,9 @@ createBirds <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew){
     # we remove birds and their characteristics because they were first observed 
     # in year i, so it wouldn't make sense to have them first seen in year and
     # then observed again for the first time in year i + 1
-    lifespanVec <- lifespanVec[-which(birdVec %in% birds)]
-    sexVec <- sexVec[-which(birdVec %in% birds)]
-    birdVec <- birdVec[-which(birdVec %in% birds)]
+    lifespanVec <- lifespanVec[which(!birdVec %in% birds)]
+    sexVec <- sexVec[which(!birdVec %in% birds)]
+    birdVec <- birdVec[which(!birdVec %in% birds)]
   }#for i
   df <- data.frame(cbind(birdy, sex, lifetime, yr))
   colnames(df) <- c("birdID", "Sex", "Lifespan", "Yr")

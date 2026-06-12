@@ -102,7 +102,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, pMate, year){
     if (nrow(newMateFemales) > 0) {
       lonelyMaleTerrs <- as.numeric(males$Terrs[!(males$Terrs %in% mateFemales$Terrs)])
       lonelyPocc <- as.numeric(males$Poccup[!(males$Terrs %in% mateFemales$Terrs)])
-      print(lonelyMaleTerrs)
       # If we need more females to mate but all males have a mate, then we run this error. 
       # I don't think we need this, but it's an extra safeguard
       if (length(lonelyMaleTerrs) == 0) {

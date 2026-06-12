@@ -14,3 +14,6 @@ makeFledge <- function(BTYdf, maxFledge) {
   return(dfNew)
 }
 
+
+
+makeFledge(DF, 4)

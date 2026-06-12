@@ -72,24 +72,17 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
   }
   # we now send the single males off to territories that have dispersed or were introduced this year
   if(nrow(maleSingDisp) > 0) {
-    print("John")
     BTYdf <- na.omit(BTYdf)
     emptyTerrs <- dfTerr[which(!dfTerr$terr %in% BTYdf$Terrs), ]
     sfTerrs <- dfTerr[which(dfTerr$terr %in% BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0 & BTYdf$Mated == 0, ]$Terrs), ]
     availTerrs <- rbind(emptyTerrs, sfTerrs)
     maleSingDisp$Terrs <- sample(availTerrs$terr, nrow(maleSingDisp), prob = as.numeric(availTerrs$Poccup), replace = FALSE)
-    print(sfTerrs$terr)
     maleSingDisp$Poccup <- as.numeric(dfTerr$Poccup[match(maleSingDisp$Terrs, dfTerr$terr)])
     maleSingDisp$Pfledge <- as.numeric(dfTerr$Pfledge[match(maleSingDisp$Terrs, dfTerr$terr)])
     if (nrow(maleSingDisp[which(maleSingDisp$Terrs %in% sfTerrs$terr), ]) > 0) {
       females <- BTYdf[BTYdf$Sex == "F", ]
-      print("Bob")
       maleSingDisp[which(maleSingDisp$Terrs %in% females$Terrs), ]$Mated <- 1
-      print(maleSingDisp)
       nonDispFemales <- BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0, ]
-      print((BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0, ]$Terrs))
-      print(maleSingDisp$Terrs)
-      print(sfTerrs$terr %in% maleSingDisp$Terrs)
       BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0 & BTYdf$Mated == 0, ]$Mated[which(sfTerrs$terr %in% maleSingDisp$Terrs)] <- 1
     }
     BTYdf <- rbind(BTYdf, maleSingDisp)
@@ -102,7 +95,6 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
     nsMales <- nrow(sMales)
     ndsFemales <- nrow(femaleSingDisp)
     nPairable <- min(nsMales, ndsFemales)
-    print(nPairable)
     if (nPairable > 0) {
       mateDraw <- rbinom(nPairable, 1, pMate)
       
@@ -110,18 +102,14 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
       femaleSingDisp$Mated[1:nPairable] <- mateDraw
       
       mateFemales <- femaleSingDisp[femaleSingDisp$Mated == 1, , drop = FALSE]
-      print(nrow(mateFemales))
       unmateFemales <- femaleSingDisp[femaleSingDisp$Mated == 0, , drop = FALSE]
       mateMales <- sMales[sMales$Mated == 1, , drop = FALSE]
-      print(mateMales)
       # Assign mated females to male territories (no replacement)
       if (nrow(mateFemales) > 1) {
-        print("foo")
         mateFemales$Terrs <- as.numeric(sample(mateMales$Terrs,
                                                size = nrow(mateFemales),
                                                prob = as.numeric(mateMales$Poccup),
                                                replace = FALSE))
-        print("jello")
         mateFemales$Poccup <- as.numeric(dfTerr$Poccup[match(mateFemales$Terrs, dfTerr$terr)])
         mateFemales$Pfledge <- as.numeric(dfTerr$Pfledge[match(mateFemales$Terrs, dfTerr$terr)])
       } # Closes if statement where we can use sample
@@ -161,7 +149,6 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
       if (nrow(newMateFemales) > 0) {
         lonelyMaleTerrs <- as.numeric(sMales$Terrs[!(sMales$Terrs %in% mateFemales$Terrs)])
         lonelyPocc <- as.numeric(sMales$Poccup[!(sMales$Terrs %in% mateFemales$Terrs)])
-        print(lonelyMaleTerrs)
         # If we need more females to mate but all males have a mate, then we run this error. 
         # I don't think we need this, but it's an extra safeguard
         if (length(lonelyMaleTerrs) == 0) {
@@ -191,7 +178,6 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
       
       # Assign remaining unmated females to empty territories
       if (nrow(newUnmateFemales) > 0 && nrow(emptyTerrs) > 0) {
-        print("Foo")
         newUnmateFemales$Terrs <- as.numeric(sample(emptyTerrs$terr,
                                                     size = nrow(newUnmateFemales),
                                                     prob = as.numeric(emptyTerrs$Poccup),
