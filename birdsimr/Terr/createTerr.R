@@ -17,6 +17,3 @@ createTerr <- function(Nterr, probQaul = c(0.1, 0.3, 0.6)){
   colnames(df) <- c("terr", "quality", "Poccup", "Pfledge")
   return(df)
 }
-
-# Hello
-# Checking from VS

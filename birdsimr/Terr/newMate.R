@@ -36,21 +36,29 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
   matedFemales$disp <- as.numeric(matedMales$disp[match(matedFemales$Terrs, matedMales$Terrs)])
   singleMales$disp <- rbinom(nrow(singleMales), 1, pDispM)
   singleFemales$disp <- rbinom(nrow(singleFemales), 1, pDispF)
-  singleMales[which(singleMales$Terrs %in% oldMatedMales$Terrs), ]$disp <- 1
-  singleFemales[which(singleFemales$Terrs %in% oldMatedFemales$Terrs), ]$disp <- 1
+  if (length(singleMales[which(singleMales$Terrs %in% oldMatedMales$Terrs), ]$disp) > 0) {
+    singleMales[which(singleMales$Terrs %in% oldMatedMales$Terrs), ]$disp <- 1
+  }
+  if (length(singleFemales[which(singleFemales$Terrs %in% oldMatedFemales$Terrs), ]$disp) > 0) {
+    singleFemales[which(singleFemales$Terrs %in% oldMatedFemales$Terrs), ]$disp <- 1
+  }
   BTYdf <- rbind(matedMales, matedFemales, singleMales, singleFemales)
   BTYdf$oldTerrs <- BTYdf$Terrs
   BTYdf[BTYdf$disp == 0, ]$Terrs <- BTYdf[BTYdf$disp == 0, ]$oldTerrs
-  BTYdf[BTYdf$disp == 1, ]$Terrs <- NA
-  BTYdf[BTYdf$disp == 1, ]$Poccup <- NA
-  BTYdf[BTYdf$disp == 1, ]$Pfledge <- NA
+  if(length(BTYdf[BTYdf$disp == 1, ]$Terrs) > 0) {
+    BTYdf[BTYdf$disp == 1, ]$Terrs <- NA
+    BTYdf[BTYdf$disp == 1, ]$Poccup <- NA
+    BTYdf[BTYdf$disp == 1, ]$Pfledge <- NA
+  }
   newBirds <- birdYear[which(!birdYear$birdID %in% BTYdf$birdID), ]
-  newBirds$Mated <- 0
-  newBirds$Terrs <- NA
-  newBirds$Poccup <- NA
-  newBirds$Pfledge <- NA
-  newBirds$disp <- 1
-  newBirds$oldTerrs <- 0
+  if (nrow(newBirds) > 0) {
+    newBirds$Mated <- 0
+    newBirds$Terrs <- NA
+    newBirds$Poccup <- NA
+    newBirds$Pfledge <- NA
+    newBirds$disp <- 1
+    newBirds$oldTerrs <- 0
+  }
   BTYdf <- rbind(BTYdf, newBirds)
   maleSingDisp <- BTYdf[BTYdf$Sex == "M" & BTYdf$Mated == 0 & BTYdf$disp == 1, ]
   femaleSingDisp <- BTYdf[BTYdf$Sex == "F" & BTYdf$Mated == 0 & BTYdf$disp == 1, ]
@@ -214,5 +222,3 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
   BTYdf$Pfledge <- fledge_year * as.numeric(BTYdf$Pfledge)
   return(BTYdf)
 }
-set.seed(2187)
-DF <- newMate(BTYdf, birds, territories, pFidel = 0.6, year = 1, pMate = 0.9)

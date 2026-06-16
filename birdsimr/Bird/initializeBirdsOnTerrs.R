@@ -140,7 +140,6 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
   finalFemales <- finalFemales[, c("birdID", "Sex", "Lifespan", "Yr", "Mated", "Terrs", "pMate", "pFledge")]
   
   df <- rbind(males, finalFemales)
-  
   return(df)
 }
 # My goal is to rbind a male df, a mated female df, and an unmated female df
@@ -149,8 +148,4 @@ initializeBirdsOnTerr <- function(dfTerr, dfBird, year){
 # bird has a mate, and maybe a column that gives the number of 
 # fledge for this first year for pairs. Could also be open to having a separate 
 # function that gives the fledge column. Maybe called something like "makeBabies"
-
-territories <- createTerr(120)
-birds <- createBirds(100, Nyr = 10, maleRatio = 0.6, propNew = rep(0.3, 10))
-BTYdf <- initializeBirdsOnTerr(territories, birds, year = 1)
 

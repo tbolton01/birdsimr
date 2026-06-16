@@ -38,19 +38,3 @@ terrSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # arg
   }
   return(dfSim)
 }
-Nbird <- 100
-maleRatio <- 0.5
-Nyr <- 5
-avgLifespan <- 3
-propNew <- rep(0.4, Nyr)
-Nterr <- 100
-probQual <- c(0.1, 0.3, 0.6)
-pFidel <- 0.5
-pMate <- 0.9
-pObs = 0.95
-pDispP = 0.05
-pDispM = 0.8
-pDispF = 0.8
-maxFledge = 4
-DF <- terrSim(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, Nterr, probQual, 
-                    pMate, pFidel = 0, maxFledge)

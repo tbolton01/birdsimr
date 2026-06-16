@@ -45,12 +45,16 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pDispP = 0.05,
   BTYdf <- rbind(matedMales, matedFemales, singleMales, singleFemales)
   BTYdf$oldTerrs <- BTYdf$Terrs
   BTYdf[BTYdf$disp == 0, ]$Terrs <- BTYdf[BTYdf$disp == 0, ]$oldTerrs
-  BTYdf[BTYdf$disp == 1, ]$Terrs <- NA
+  if(length(BTYdf[BTYdf$disp == 1, ]$Terrs) > 0) {
+    BTYdf[BTYdf$disp == 1, ]$Terrs <- NA
+  }
   newBirds <- birdYear[which(!birdYear$birdID %in% BTYdf$birdID), ]
-  newBirds$Mated <- 0
-  newBirds$Terrs <- NA
-  newBirds$disp <- 1
-  newBirds$oldTerrs <- 0
+  if (nrow(newBirds) > 0) {
+    newBirds$Mated <- 0
+    newBirds$Terrs <- NA
+    newBirds$disp <- 1
+    newBirds$oldTerrs <- 0
+  }
   BTYdf <- rbind(BTYdf, newBirds)
   maleSingDisp <- BTYdf[BTYdf$Sex == "M" & BTYdf$Mated == 0 & BTYdf$disp == 1, ]
   femaleSingDisp <- BTYdf[BTYdf$Sex == "F" & BTYdf$Mated == 0 & BTYdf$disp == 1, ]

@@ -36,18 +36,3 @@ birdSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # arg
   }
   return(dfSim)
 }
-Nbird <- 20
-maleRatio <- 0.5
-Nyr <- 5
-avgLifespan <- 3
-propNew <- rep(0.5, Nyr)
-Nterr <- 40
-pFidel <- 0.5
-pDispP = 0.05
-pDispM = 0.8 
-pDispF = 0.8
-maxFledge = 4
-pObsM = 1
-pObsF = 1
-birdSim(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, Nterr, pFidel = 0, 
-        pDispP = 0.05, pDispM = 0.8, pDispF = 0.8, maxFledge = 4, pObsM = 1, pObsF = 1)
