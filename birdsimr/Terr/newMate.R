@@ -91,7 +91,7 @@ newMate <- function(BTYdf, dfBird, dfTerr, pFidel = 0, year, pMate, pDispP = 0.6
       females <- BTYdf[BTYdf$Sex == "F", ]
       maleSingDisp[which(maleSingDisp$Terrs %in% females$Terrs), ]$Mated <- 1
       nonDispFemales <- BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0, ]
-      BTYdf[BTYdf$Sex == "F" & BTYdf$disp == 0 & BTYdf$Mated == 0, ]$Mated[which(sfTerrs$terr %in% maleSingDisp$Terrs)] <- 1
+      BTYdf[which(BTYdf$Terrs %in% maleSingDisp$Terrs), ]$Mated <- 1
     }
     BTYdf <- rbind(BTYdf, maleSingDisp)
   }

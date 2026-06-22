@@ -5,12 +5,19 @@ files <- c("birdFunc.R", "createTerr.R", "initializeBirdsOnTerrs.R",
 lapply(files, source)
 birdSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # args for bird dataset
                     Nterr, #arg for terr dataset
-                    pFidel = 0, pDispP = 0.05, pDispM = 0.8, pDispF = 0.8,# args still needed for new mate function
+                    pFidel = 0, pDispP = 0.05, pDispM = 0.8, pDispF = 0.8, 
+                    mateAlphaPoor, mateBetaPoor, flegeAlphaPoor, fledgeBetaPoor, 
+                    poorSpan, mateAlphaMid, mateBetaMid, flegeAlphaMid, fledgeBetaMid, 
+                    midSpanL, midSpanU, mateAlphaGood, mateBetaGood, flegeAlphaGood, fledgeBetaGood, 
+                    goodSpan, # args still needed for new mate function
                     maxFledge = 4, # argument needed for the make fledge function
                     pObsM = 1, pObsF = 1
 ) {
   dfTerr <- createTerr(Nterr)
-  dfBird <- createBirds(Nbird, maleRatio, Nyr, avgLifespan, propNew)
+  dfBird <- createBirds(Nbird, maleRatio, Nyr, avgLifespan, propNew, mateAlphaPoor, mateBetaPoor, flegeAlphaPoor, fledgeBetaPoor, 
+                        poorSpan, mateAlphaMid, mateBetaMid, flegeAlphaMid, fledgeBetaMid, 
+                        midSpanL, midSpanU, mateAlphaGood, mateBetaGood, flegeAlphaGood, fledgeBetaGood, 
+                        goodSpan)
   birdTerrY1 <- initializeBirdsOnTerr(dfTerr, dfBird, year = 1)
   birdTerrY1 <- makeFledge(birdTerrY1, maxFledge)
   dfSim <- birdTerrY1

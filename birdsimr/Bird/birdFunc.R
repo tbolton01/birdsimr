@@ -1,5 +1,9 @@
 # Could look at making propNew a vector of proportions of length Nyr
-createBirds <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew){
+createBirds <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, 
+                        mateAlphaPoor, mateBetaPoor, flegeAlphaPoor, fledgeBetaPoor, 
+                        poorSpan, mateAlphaMid, mateBetaMid, flegeAlphaMid, fledgeBetaMid, 
+                        midSpanL, midSpanU, mateAlphaGood, mateBetaGood, flegeAlphaGood, fledgeBetaGood, 
+                        goodSpan){
   birdVec <- c(1:Nbird)
   lifespanVec <- rgeom(Nbird, 1/avgLifespan) + 1 
   # adding 1 because I want that to be the number of years we observe a bird
@@ -73,17 +77,17 @@ createBirds <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew){
     numYrs <- length(unique(male_i$Yr))
     # if the bird has a short lifespan, it has a low prob of fledge since it is 
     # most likely not a bird of high fitness. 
-    if (span_i <= 3) {
-      pFledge <- c(pFledge, rep(rbeta(1, 1, 3), numYrs))
-      pMate <- c(pMate, rep(runif(1), numYrs))
+    if (span_i <= poorSpan) {
+      pFledge <- c(pFledge, rep(rbeta(1, flegeAlphaPoor, fledgeBetaPoor), numYrs))
+      pMate <- c(pMate, rep(rbeta(1, mateAlphaPoor, mateBetaPoor), numYrs))
     }
-    if (3 < span_i & span_i <= 6) {
-      pFledge <- c(pFledge, rep(runif(1), numYrs))
-      pMate <- c(pMate, rep(rbeta(1, 4, 1), numYrs))
+    if (midSpanL < span_i & span_i <= midSpanU) {
+      pFledge <- c(pFledge, rep(rbeta(1, flegeAlphaMid, fledgeBetaMid), numYrs))
+      pMate <- c(pMate, rep(rbeta(1, mateAlphaMid, mateBetaMid), numYrs))
     }
-    if (span_i > 6) {
-      pMate <- c(pMate, rep(rbeta(1, 5, 1), numYrs))
-      pFledge <- c(pFledge, rep(rbeta(1, 3, 1), numYrs))
+    if (span_i > goodSpan) {
+      pFledge <- c(pFledge, rep(rbeta(1, flegeAlphaGood, fledgeBetaGood), numYrs))
+      pMate <- c(pMate, rep(rbeta(1, mateAlphaGood, mateBetaGood), numYrs))
     }
   }#close for loop
   males <- cbind(males, pMate, pFledge)
