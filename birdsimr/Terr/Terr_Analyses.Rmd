@@ -55,14 +55,14 @@ For this report, we generated 20 different simulated data sets varying probabili
 
 form.list=list(as.formula(Fledge~
                           # this is what can be switched up
-                            s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Fledge~
                           # this is what can be switched up 
-                            s(Yr, bs = "cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Fledge~
-                             s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 pois.summary.results=list()
 pois.smooth.results=list()
@@ -87,7 +87,7 @@ kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
 
-Models that include territory seem to perform better on model selection criteria. 
+Apart from BIC, models that included territory seemed to perform better on the model selection criteria. 
 We now also need to check model assumptions and diagnostics.
 
 ```{r Boromir, comment = NA, echo = FALSE}
@@ -95,23 +95,24 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots seem reasonable. However, the QQ plot for the model that does not include territory seems to look noticably worse than the other two models. 
+Our k-indices are smaller than one would hope for and suggest underfitting.  
 ```{r Gothmog, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
 appraise(models[[3]], method = "simulate")
 ```
+These model diagnostics seem to suggest a slight violation of assumptions and underfitting.
 
 ## Z-score number of fledgling (Gaussian)
 ```{r Bilbo Baggins, comment = NA ,echo = FALSE}
 form.list=list(as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 z.summary.results=list()
 z.smooth.results=list()
@@ -137,7 +138,7 @@ kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
 
 ```
 
-That models that include territory are performing better on the model selection criteria. 
+Even though AIC and BIC aren't selecting a clear winner, the extremely low adjusted $R^2$ would seem to suggest that models should include territory. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -147,13 +148,14 @@ k.check(models[[2]])
 k.check(models[[3]])
 ```
 
-Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The diagnostic plots all seem reasonable except for the first model which only fits band ID as a random effect. This seems reasonable considering we are missing the factor that is driving variation in fledgling success. 
+Our k-indices are still on the smaller side. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect.
 
 ```{r Gloin, comment = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
 appraise(models[[3]], method = "simulate")
 ```
+The QQ plot does suggest violation in the model assumptions. 
 
 ## Eggs (Binomial)
 
@@ -161,14 +163,14 @@ appraise(models[[3]], method = "simulate")
 
 form.list=list(as.formula(Eggs~
                           # this is what can be switched up
-                            s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Eggs~
                           # this is what can be switched up 
-                            s(Yr, bs = "cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Eggs~
-                             s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 binom.summary.results=list()
 binom.smooth.results=list()
@@ -193,7 +195,7 @@ kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
 
-As we would expect, models with territory included perform better on model selection criteria than the model fit with only band ID. 
+The model only fitting only territory as a random effect seems to perform better on AIC and BIC. However the adjusted $R^2$ of the model that includes both variables is noticeably higher than the models that were fit with only one random effect. While one could debate over including both random effects, it does seem safe to say that no practitioner would pick the model that only includes band ID as the random effect.
 
 We now also need to check model assumptions and diagnostics.
 
@@ -202,7 +204,7 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
+Our k-indices are smaller than one would hope for, it seems there is some underfitting in the model. However, the diagnostic plots don't seem terribly unreasonable. 
 ```{r Balrog, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
@@ -217,7 +219,7 @@ string <- paste0("This dataset was generated with a probability of mate fidelity
                  ", and a probability of single female dispersal of ", round(probs$pDispF[1], 3))
 print(string)
 ```
-Our results make sense seeing as our probability of mate fidelity was so low. In the simulation, we have bird dispersing if they don't mate again. Since we had some dispersal in the data, the territory effect was able to shine through. 
+Seeing that our probability of mate fidelity was so low, it makes sense that models with territory performed well on model selection criteria. However, our dispersal probabilities were not terribly high, so apart from the model that fit z-scores as a response, models with only bird ID weren't substantially worse than the ones fit with territory. 
 
 # Simulation 2
 
@@ -227,14 +229,14 @@ Our results make sense seeing as our probability of mate fidelity was so low. In
 
 form.list=list(as.formula(Fledge~
                           # this is what can be switched up
-                            s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Fledge~
                           # this is what can be switched up 
-                            s(Yr, bs = "cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Fledge~
-                             s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 pois.summary.results=list()
 pois.smooth.results=list()
@@ -258,7 +260,8 @@ kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
 kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
-Models with territory included better performed on the model selection criteria than the model that only fit band ID as a random effect. 
+
+It does seem that the model only fitting territory performs well on the model selection criteria, even though its not the best for all of the model selection criteria, there isn't a criteria where it is performing substantially worse than the best model in that criteria, and it does have the best AIC. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -267,7 +270,7 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots for the models that include territory seem to look reasonable. Note that the worst QQ plot is the one that doesn't include territory in the model. 
+Our k-indices are smaller than one would hope for and would suggest some underfitting. However, noe of the diagnostic plots seem to suggest major violation of distributional assumptions. 
 
 ```{r Gondor, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
@@ -278,13 +281,13 @@ appraise(models[[3]], method = "simulate")
 ## Z-score number of fledgling (Gaussian)
 ```{r Rivendell, comment = NA ,echo = FALSE}
 form.list=list(as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 z.summary.results=list()
 z.smooth.results=list()
@@ -310,7 +313,7 @@ kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
 
 ```
 
-Models that fit territory as a random effect perform better on the model selection criteria. 
+Apart from BIC, the model fitting both terms is performing the best on selection criteria
 
 We now also need to check model assumptions and diagnostics.
 
@@ -320,7 +323,7 @@ k.check(models[[2]])
 k.check(models[[3]])
 ```
 
-Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The diagnostic plots all seem reasonable except for the first model which only fits band ID as a random effect. This seems reasonable considering we are missing the factor that is driving variation in fledgling success. 
+The k-indices are better than all previous models. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem reasonable. 
 
 ```{r Sauron, comment = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
@@ -334,14 +337,14 @@ appraise(models[[3]], method = "simulate")
 
 form.list=list(as.formula(Eggs~
                           # this is what can be switched up
-                            s(Yr, bs = "cr", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Eggs~
                           # this is what can be switched up 
-                            s(Yr, bs = "cr", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Eggs~
-                             s(Yr, bs = "cr", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 binom.summary.results=list()
 binom.smooth.results=list()
@@ -366,7 +369,7 @@ kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
 
-As we would expect, models with territory included perform better on model selection criteria than the model fit with only band ID. 
+Each model seems to perform well on different selection criteria. I don't feel there is a clear superior model.
 
 We now also need to check model assumptions and diagnostics.
 
@@ -375,7 +378,7 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
+Our k-indices are smaller than one would hope for and suggest possible underfitting. However, the diagnostic plots don't seem terribly unreasonable. 
 ```{r Minas Morgal, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
@@ -391,7 +394,7 @@ string <- paste0("This dataset was generated with a probability of mate fidelity
                  ", and a probability of single female dispersal of ", round(probs$pDispF[2], 3))
 print(string)
 ```
-Seeing that we once again had a low probability of mate fidelity and 2 higher probabilities of dispersal, it seems reasonable that the territory effect was able to be seen yet again. 
+This is a bit surprising since birds were most likely moving around a bit. However, we are analyzing females and the probability of single female dispersal is quite low, which could be playing a role in the fact that territory models aren't clearly better. 
 
 # Simulation 3
 
@@ -401,14 +404,14 @@ Seeing that we once again had a low probability of mate fidelity and 2 higher pr
 
 form.list=list(as.formula(Fledge~
                           # this is what can be switched up
-                            s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Fledge~
                           # this is what can be switched up 
-                            s(Yr, bs = "cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Fledge~
-                             s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 pois.summary.results=list()
 pois.smooth.results=list()
@@ -432,7 +435,7 @@ kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
 kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
-Models with territory included better performed on the model selection criteria than the model that only fit band ID as a random effect. 
+The models fitting territory seem to perform similarly on the selection criteria, except the model that fits both terms does not perform well on BIC. The model fitting band ID only performs well on BIC, thus I would pick the model that only fits territory as a random effect.  
 
 We now also need to check model assumptions and diagnostics.
 
@@ -441,8 +444,7 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots for the models that include territory seem to look reasonable. Note that the worst QQ plot is the one that doesn't include territory in the model. 
-
+Our k-indices are smaller than one would hope for. However, the diagnostic plots don't look terrible, but they could also be better. 
 ```{r Grima Wormtongue, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
@@ -452,13 +454,13 @@ appraise(models[[3]], method = "simulate")
 ## Z-score number of fledgling (Gaussian)
 ```{r Morgoth, comment = NA ,echo = FALSE}
 form.list=list(as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 z.summary.results=list()
 z.smooth.results=list()
@@ -484,7 +486,7 @@ kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
 
 ```
 
-Models that fit territory as a random effect perform better on the model selection criteria. 
+The band ID model did perform well on BIC, but not the other criteria. Seeing that the model that fit both terms has a poor BIC, I would recommend the model only fitting territory. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -494,7 +496,7 @@ k.check(models[[2]])
 k.check(models[[3]])
 ```
 
-Our k-indices seem reasonable. The diagnostic plots all seem reasonable except for the first model which only fits band ID as a random effect. This seems reasonable considering we are missing the factor that is driving variation in fledgling success. 
+Our k-indices seem reasonable. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem reasonable except for the first model which only fits band ID as a random effect. This seems reasonable considering we are missing the factor that is driving variation in fledgling success. 
 
 ```{r Merry, comment = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
@@ -508,14 +510,14 @@ appraise(models[[3]], method = "simulate")
 
 form.list=list(as.formula(Eggs~
                           # this is what can be switched up
-                            s(Yr, bs = "cr", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Eggs~
                           # this is what can be switched up 
-                            s(Yr, bs = "cr", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Eggs~
-                             s(Yr, bs = "cr", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 binom.summary.results=list()
 binom.smooth.results=list()
@@ -540,7 +542,7 @@ kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
 
-As we would expect, models with territory included perform better on model selection criteria than the model fit with only band ID. 
+I would say it's somewhat difficult to pick between the models fitting only one random effect. However, the model fitting both REs only performs well on adjusted $R^2$. I would pick the model fitting only territory since it performs better on AIC and adjusted $R^2$ than the model only fitting band ID. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -549,7 +551,7 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
+Our k-indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
 ```{r Haldir, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
@@ -561,10 +563,10 @@ appraise(models[[3]], method = "simulate")
 string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[3], 3), 
                  ", a probability of pair dispersal of ", round(probs$pDispP[3], 3), 
                  ", a probability of single male dispersal of ", round(probs$pDispM[3], 3), 
-                 ", and a probability of single female dispersal of ", round(probs$pDispF[2], 3))
+                 ", and a probability of single female dispersal of ", round(probs$pDispF[3], 3))
 print(string)
 ```
-Seeing that we once again had a low probability of mate fidelity and a higher probability of pair dispersal, it seems reasonable that the territory effect was able to be seen yet again. 
+Here, we should notice the low mate fidelity rate and the fact that dispersal probabilities aren't terribly low.
 
 # Simulation 4
 
@@ -574,14 +576,14 @@ Seeing that we once again had a low probability of mate fidelity and a higher pr
 
 form.list=list(as.formula(Fledge~
                           # this is what can be switched up
-                            s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Fledge~
                           # this is what can be switched up 
-                            s(Yr, bs = "cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Fledge~
-                             s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 pois.summary.results=list()
 pois.smooth.results=list()
@@ -605,7 +607,7 @@ kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
 kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
-Models with territory included better performed on the model selection criteria than the model that only fit band ID as a random effect. 
+Territory seems to be the best model since it performs competitively on all criteria. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -614,7 +616,7 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots for the models that include territory seem to look reasonable. Note that the worst QQ plot is the one that doesn't include territory in the model. 
+Our k-indices are smaller than one would hope for. However, the diagnostic plots for the models that include territory seem to look reasonable.  
 
 ```{r The Witch King of Angmar, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
@@ -625,13 +627,13 @@ appraise(models[[3]], method = "simulate")
 ## Z-score number of fledgling (Gaussian)
 ```{r Eowyn, comment = NA ,echo = FALSE}
 form.list=list(as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 z.summary.results=list()
 z.smooth.results=list()
@@ -657,7 +659,7 @@ kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
 
 ```
 
-Models that fit territory as a random effect perform better on the model selection criteria, except BIC. However, the model with both random effects is performing better noticeably than the model that just fits territory. 
+Based on AIC and adjusted $R^2$, I would recommend the model fitting both random effects. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -667,7 +669,7 @@ k.check(models[[2]])
 k.check(models[[3]])
 ```
 
-Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The diagnostic plots all seem reasonable except for the first model which only fits band ID as a random effect. This seems reasonable considering we are missing the factor that is driving variation in fledgling success. 
+Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem reasonable except for the first model which only fits band ID as a random effect. This seems reasonable considering we are missing the factor that is driving variation in fledgling success. 
 
 ```{r Rossie Cotton, comment = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
@@ -713,7 +715,7 @@ kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
 
-AIC, BIC, and adjusted $R^2$ don't agree on a model, where as typically before, adjusted $R^2$ and AIC tended to agree. However, the model without territory performs the worst on most criteria except for BIC. 
+We are in a situation where yet again, there isn't a model that is clearly better. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -722,7 +724,7 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
+Our k-indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
 ```{r Elendil, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
@@ -738,7 +740,7 @@ string <- paste0("This dataset was generated with a probability of mate fidelity
                  ", and a probability of single female dispersal of ", round(probs$pDispF[4], 3))
 print(string)
 ```
-Even though probability of mate fidelity is high, all probabilities of dispersal are either moderate or high with 2/3 of those probabilities being high, which is most likely why the territory effect can still be seen. However, the territory effect isn't as clear as in the first 3 simulations.
+Even though probability of mate fidelty was high, so were the probabilities of dispersal, thus allowing a territory effect to seem present. 
 
 # Simulation 5
 
@@ -748,14 +750,14 @@ Even though probability of mate fidelity is high, all probabilities of dispersal
 
 form.list=list(as.formula(Fledge~
                           # this is what can be switched up
-                            s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Fledge~
                           # this is what can be switched up 
-                            s(Yr, bs = "cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Fledge~
-                             s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 pois.summary.results=list()
 pois.smooth.results=list()
@@ -779,7 +781,7 @@ kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
 kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
-Models with territory included better performed on the model selection criteria than the model that only fit band ID as a random effect. 
+From the output above, even though the models with either territory or both terms perform similarly, the BIC on the model with both terms is a bit high, so I would pick the model that only includes territory. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -788,7 +790,7 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots for the models that include territory seem to look reasonable. Note that the worst QQ plot is the one that doesn't include territory in the model. 
+Our k-indices are smaller than one would hope for. The diagnostic plots for the models are perhaps mildly concerning, but not awful.
 
 ```{r Helm's Deep, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
@@ -799,13 +801,13 @@ appraise(models[[3]], method = "simulate")
 ## Z-score number of fledgling (Gaussian)
 ```{r Mirkwood, comment = NA ,echo = FALSE}
 form.list=list(as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 z.summary.results=list()
 z.smooth.results=list()
@@ -831,7 +833,7 @@ kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
 
 ```
 
-AIC, BIC, and adjusted $R^2$ don't agree on a model, where as typically before, adjusted $R^2$ and AIC tended to agree. However, the model without territory performs the worst on most criteria except for BIC. 
+The model with both terms performed best on AIC and adjusted $R^2$. I would most likely pick that model.
 
 We now also need to check model assumptions and diagnostics. 
 
@@ -841,7 +843,7 @@ k.check(models[[2]])
 k.check(models[[3]])
 ```
 
-Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The diagnostic plots all seem reasonable except for the first model which only fits band ID as a random effect. This seems reasonable considering we are missing the factor that is driving variation in fledgling success. 
+Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem somewhat reasonable.  
 
 ```{r Eagles, comment = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
@@ -855,14 +857,14 @@ appraise(models[[3]], method = "simulate")
 
 form.list=list(as.formula(Eggs~
                           # this is what can be switched up
-                            s(Yr, bs = "cr", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Eggs~
                           # this is what can be switched up 
-                            s(Yr, bs = "cr", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Eggs~
-                             s(Yr, bs = "cr", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 binom.summary.results=list()
 binom.smooth.results=list()
@@ -887,7 +889,7 @@ kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
 
-As we would expect, models with territory included perform better on model selection criteria than the model fit with only band ID. 
+I don't think there is a model that is clearly better. 
 
 We now also need to check model assumptions and diagnostics.
 
@@ -896,7 +898,8 @@ k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
+Our k-indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. However the QQ plot for the model that fits both REs (the third one) does look a bit worse, so I would maybe consider the models that only fit only one RE.
+
 ```{r Minas Morgal, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
@@ -912,24 +915,24 @@ string <- paste0("This dataset was generated with a probability of mate fidelity
                  ", and a probability of single female dispersal of ", round(probs$pDispF[5], 3))
 print(string)
 ```
-In this simulation, we had a probability of mate fidelity that wasn't terribly high and moderate probability of dispersal, except for the single females, so the territory effect can still somewhat be seen. 
+Once again, we had low a probability of single female dispersal and it was harder to distinguish the territory effect. 
 
-# Simulation 18
+# Simulation 6
 
 ## Number of fledgling as the response (Poisson)
 
-```{r Galmdring, comment = NA, echo = FALSE}
+```{r Coruscant, comment = NA, echo = FALSE}
 
 form.list=list(as.formula(Fledge~
                           # this is what can be switched up
-                            s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Fledge~
                           # this is what can be switched up 
-                            s(Yr, bs = "cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Fledge~
-                             s(Yr, bs = "cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 pois.summary.results=list()
 pois.smooth.results=list()
@@ -937,7 +940,7 @@ pois.fixed.results=list()
 models <- list()
 for(i in 1:length(form.list)){
   # fit model
-  mod=gam(form.list[[i]],data=df_list[[18]],method="REML",family=poisson)
+  mod=gam(form.list[[i]],data=df_list[[6]],method="REML",family=poisson)
   models[[i]] <- mod
   # gather results & add labels
   pois.summary.results[[i]]=glance(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
@@ -953,33 +956,33 @@ kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
 kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
-Models with territory included better performed on the model selection criteria than the model that only fit band ID as a random effect. 
+From the output above, I would definitely recommend fitting the model with a band ID random effect. 
 
 We now also need to check model assumptions and diagnostics.
 
-```{r Tom Bombadil, comment = NA, echo = FALSE}
+```{r Anakin Skywalker, comment = NA, echo = FALSE}
 k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots for the models that include territory seem to look reasonable. Note that the worst QQ plot is the one that doesn't include territory in the model. 
+Our k-indices are smaller than one would hope for. The diagnostic plots for the models are perhaps mildly concerning, but not awful.
 
-```{r Edoras, commet = NA, echo = FALSE}
+```{r Rex, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
 appraise(models[[3]], method = "simulate")
 ```
 
 ## Z-score number of fledgling (Gaussian)
-```{r Faramir, comment = NA ,echo = FALSE}
+```{r Fives, comment = NA ,echo = FALSE}
 form.list=list(as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(Terrs,bs="re")),
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
                
                as.formula(z_score~
-                            s(Yr,bs="cc", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 z.summary.results=list()
 z.smooth.results=list()
@@ -987,7 +990,7 @@ z.fixed.results=list()
 models <- list()
 for(i in 1:length(form.list)){
   # fit model
-  mod=gam(form.list[[i]],data=df_list[[18]],method="REML")
+  mod=gam(form.list[[i]],data=df_list[[6]],method="REML")
   models[[i]] <- mod
   # gather results & add labels
   z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
@@ -1005,19 +1008,19 @@ kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
 
 ```
 
-Models that fit territory as a random effect perform better on the model selection criteria. 
+I would recommend fitting both REs in the model.
 
-We now also need to check model assumptions and diagnostics.
+We now also need to check model assumptions and diagnostics. 
 
-```{r Bofur, comment = NA, echo = FALSE}
+```{r Padme, comment = NA, echo = FALSE}
 k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
 
-Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The diagnostic plots all seem reasonable except for the first model which only fits band ID as a random effect. This seems reasonable considering we are missing the factor that is driving variation in fledgling success. 
+Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem somewhat reasonable.  
 
-```{r Celebrimbor, comment = NA, echo = FALSE}
+```{r Chosen one, comment = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
 appraise(models[[3]], method = "simulate")
@@ -1025,18 +1028,18 @@ appraise(models[[3]], method = "simulate")
 
 ## Eggs (Binomial)
 
-```{r Isengard, comment = NA, echo = FALSE}
+```{r Yularen, comment = NA, echo = FALSE}
 
 form.list=list(as.formula(Eggs~
                           # this is what can be switched up
-                            s(Yr, bs = "cr", k = 19)+s(birdID,bs="re")),
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
                
                 as.formula(Eggs~
                           # this is what can be switched up 
-                            s(Yr, bs = "cr", k = 19)+s(Terrs,bs="re")),
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
                
                 as.formula(Eggs~
-                             s(Yr, bs = "cr", k = 19)+s(birdID,bs="re")+s(Terrs,bs="re")))
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
 
 binom.summary.results=list()
 binom.smooth.results=list()
@@ -1044,7 +1047,7 @@ binom.fixed.results=list()
 models <- list()
 for(i in 1:length(form.list)){
   # fit model
-  mod=gam(form.list[[i]],data=df_list[[18]],method="REML",family=binomial)
+  mod=gam(form.list[[i]],data=df_list[[6]],method="REML",family=binomial)
   models[[i]] <- mod
   # gather results & add labels
   binom.summary.results[[i]]=glance(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
@@ -1061,29 +1064,908 @@ kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
 kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
 ```
 
-As we would expect, models with territory included perform better on model selection criteria than the model fit with only band ID, except for BIC. 
+Based on the output alone, I would suspect a band ID effect. 
 
 We now also need to check model assumptions and diagnostics.
 
-```{r Palantir, comment = NA, echo = FALSE}
+```{r Oddball, comment = NA, echo = FALSE}
 k.check(models[[1]])
 k.check(models[[2]])
 k.check(models[[3]])
 ```
-Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
-```{r Bagend, commet = NA, echo = FALSE}
+Our k-indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. However the QQ plot for the model that fits both REs (the third one) does look a bit worse, so I would maybe consider the models that only fit only one RE.
+
+```{r Echo, commet = NA, echo = FALSE}
 appraise(models[[1]], method = "simulate")
 appraise(models[[2]], method = "simulate")
 appraise(models[[3]], method = "simulate")
 ```
 
-## Probabilites used to generate simulation 2
+## Probabilites used to generate simulation 6
 
-```{r Prancing Pony, comment = NA, echo = FALSE}
-string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[18], 3), 
-                 ", a probability of pair dispersal of ", round(probs$pDispP[18], 3), 
-                 ", a probability of single male dispersal of ", round(probs$pDispM[18], 3), 
-                 ", and a probability of single female dispersal of ", round(probs$pDispF[18], 3))
+```{r Jesse, comment = NA, echo = FALSE}
+string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[6], 3), 
+                 ", a probability of pair dispersal of ", round(probs$pDispP[6], 3), 
+                 ", a probability of single male dispersal of ", round(probs$pDispM[6], 3), 
+                 ", and a probability of single female dispersal of ", round(probs$pDispF[6], 3))
 print(string)
 ```
-It is most likely that single females dispersing and ending up on all sorts of territories seems to help the territory effect shine through. 
+Once again, we had low a probability of single female dispersal and it was harder to distinguish the territory effect. 
+
+# Simulation 7
+
+## Number of fledgling as the response (Poisson)
+
+```{r Cassian Andor, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[7]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+Based on the model only including band ID's extremely low adjusted $R^2$, and the other two models similar performance, I would recommend the model only fitting territory. 
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Maarva Andor, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our k-indices are smaller than one would hope for. The diagnostic plots for the models are perhaps mildly concerning, but not awful, except for the model only fitting band ID. I would not trust model output from that model. 
+
+```{r U-wing, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Z-score number of fledgling (Gaussian)
+```{r Bix Caleen, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[7]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Similar to the previous models, I would pick the model only fitting territory. 
+
+We now also need to check model assumptions and diagnostics. 
+
+```{r K-2SO, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+
+Our k-indices look good. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem somewhat reasonable.  
+
+```{r B2EMO, comment = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Eggs (Binomial)
+
+```{r Brasso, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[7]],method="REML",family=binomial)
+  models[[i]] <- mod
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The model fitting only territory has a good AIC and adjusted $R^2$, thus it seems the territory effect is present. 
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Ferrix, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our k-indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable.
+
+```{r Timm, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Probabilites used to generate simulation 7
+
+```{r Melshi, comment = NA, echo = FALSE}
+string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[7], 3), 
+                 ", a probability of pair dispersal of ", round(probs$pDispP[7], 3), 
+                 ", a probability of single male dispersal of ", round(probs$pDispM[7], 3), 
+                 ", and a probability of single female dispersal of ", round(probs$pDispF[7], 3))
+print(string)
+```
+All probabilities of dispersal were high and the territory effect was pretty clear on these sets of models. 
+
+# Simulation 8
+
+## Number of fledgling as the response (Poisson)
+
+```{r Sheev Palpatine, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[8]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+All models are performing similarly. I wouldn't think there to be one effect that is stronger than the other based on the output above, 
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Moff Jerjerrod, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our k-indices are smaller than one would hope for. The diagnostic plots for the models are perhaps mildly concerning, but not awful.
+
+```{r Death Star, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Z-score number of fledgling (Gaussian)
+```{r Imperial Senate, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[8]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+I would potentially be more partial to a band ID effect due to the low adjusted $R^2$ on the territory only model and the fact that the territory only model has the worst AIC. 
+
+We now also need to check model assumptions and diagnostics. 
+
+```{r Thrawn, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+
+Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem somewhat reasonable.  
+
+```{r Chancellor, comment = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Eggs (Binomial)
+
+```{r Exegol, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[8]],method="REML",family=binomial)
+  models[[i]] <- mod
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+I would say something similar to what I said on the previous batch of models. 
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Sith Eternal, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our k-indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
+
+```{r Royal Guards, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Probabilites used to generate simulation 8
+
+```{r Lighting, comment = NA, echo = FALSE}
+string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[8], 3), 
+                 ", a probability of pair dispersal of ", round(probs$pDispP[8], 3), 
+                 ", a probability of single male dispersal of ", round(probs$pDispM[8], 3), 
+                 ", and a probability of single female dispersal of ", round(probs$pDispF[8], 3))
+print(string)
+```
+W had a low probability of male dispersal and the territory effect was difficult to detect. 
+
+# Simulation 9
+
+## Number of fledgling as the response (Poisson)
+
+```{r Jabba the Hutt, comment= NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[9]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+From the output above, there doesn't seem to be a clear domminant effect.  
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Bossk, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our K indices are smaller than one would hope for. It also seems that models with bandID are shrinking the year smoother out of the model. The diagnostic plots are not ideal. I would be more cautious with these models. 
+
+```{r Boba Fett, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Z-score number of fledgling (Gaussian)
+```{r Bib Fortuna, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[9]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Similar to the batch of models before.
+
+We now also need to check model assumptions and diagnostics. 
+
+```{r Gamorean Guard, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+
+Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem somewhat reasonable.  
+
+```{r Sy Snootles, comment = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Eggs (Binomial)
+
+```{r Max Rebo, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[9]],method="REML",family=binomial)
+  models[[i]] <- mod
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The models with band ID seem to to better on AIC and adjusted $R^2$. 
+
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Wooof, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. However the QQ plot for the model that fits both REs (the third one) does look a bit worse, so I would maybe consider the models that only fit only one RE.
+
+```{r Tatooine, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Probabilites used to generate simulation 9
+
+```{r Desert skiff, comment = NA, echo = FALSE}
+string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[9], 3), 
+                 ", a probability of pair dispersal of ", round(probs$pDispP[9], 3), 
+                 ", a probability of single male dispersal of ", round(probs$pDispM[9], 3), 
+                 ", and a probability of single female dispersal of ", round(probs$pDispF[9], 3))
+print(string)
+```
+Once again, we had low a probability of single female dispersal and it was harder to distinguish the territory effect. 
+
+# Simulation 10
+
+## Number of fledgling as the response (Poisson)
+
+```{r Han Solo, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[10]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+One could argue between fitting both effects or just territory, but the band ID only model does not seem to perform as well. 
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Chewbacca, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our K indices are smaller than one would hope for. The diagnostic plots for the models are perhaps mildly concerning, but not awful.
+
+```{r DL-44, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Z-score number of fledgling (Gaussian)
+```{r Millenium Falcon, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[10]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Based on AIC and adjusted $R^2$, I would say the model fitting both random effects performs the best. 
+
+We now also need to check model assumptions and diagnostics. 
+
+```{r Corellia, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+
+Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The diagnostic plots all seem somewhat reasonable.  
+
+```{r Beckett, comment = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Eggs (Binomial)
+
+```{r Lando, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[10]],method="REML",family=binomial)
+  models[[i]] <- mod
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+I don't think there is a model that is clearly better. 
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Rio Durrant, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. 
+
+```{r Kessel run, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Probabilites used to generate simulation 10
+
+```{r Qi'ra, comment = NA, echo = FALSE}
+string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[10], 3), 
+                 ", a probability of pair dispersal of ", round(probs$pDispP[10], 3), 
+                 ", a probability of single male dispersal of ", round(probs$pDispM[10], 3), 
+                 ", and a probability of single female dispersal of ", round(probs$pDispF[10], 3))
+print(string)
+```
+Male and pair dispersal probabilities were low, but female dispersal were moderate. In the models, there was more of a preference towards a territory effect, but it wasn't terribly clear. 
+
+# Simulation 11
+
+## Number of fledgling as the response (Poisson)
+
+```{r Rey, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cc", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             s(Yr, bs = "cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[11]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+Overall, I wouldn't say there's a clear superior model when considering multiple selection criteria. 
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Finn, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our K indices are smaller than one would hope for. The diagnostic plots for the models are perhaps mildly concerning, but not awful.
+
+```{r Porgs, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Z-score number of fledgling (Gaussian)
+```{r Jakku, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(Yr,bs="cc", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[11]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Seeing as the model with both terms has the best AIC and a higher adjusted $R^2$, I would recommend that model.
+
+We now also need to check model assumptions and diagnostics. 
+
+```{r Poe Dameron, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+
+Our k-indices are still on the smaller side, but are better than those seen in the models fit with other response variables. The edf on the year term suggests that it is being shrunk out of the model, which is expected since the z-scores are calculated to remove the year effect. The QQ plots for the models including territory are better, but none of the diagnostic plots seem to suggest gross violations of assumptions. 
+
+```{r BB-8, comment = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Eggs (Binomial)
+
+```{r Holdo, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            s(Yr, bs = "cr", k = 15)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             s(Yr, bs = "cr", k = 15)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[11]],method="REML",family=binomial)
+  models[[i]] <- mod
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Similar to the previous batch of models. 
+
+We now also need to check model assumptions and diagnostics.
+
+```{r Crait, comment = NA, echo = FALSE}
+k.check(models[[1]])
+k.check(models[[2]])
+k.check(models[[3]])
+```
+Our K indices are smaller than one would hope for. However, the diagnostic plots don't seem terribly unreasonable. However the QQ plot for the model that fits both REs (the third one) does look a bit worse, so I would maybe consider the models that only fit only one RE.
+
+```{r Maz Kanata, commet = NA, echo = FALSE}
+appraise(models[[1]], method = "simulate")
+appraise(models[[2]], method = "simulate")
+appraise(models[[3]], method = "simulate")
+```
+
+## Probabilites used to generate simulation 5
+
+```{r Scavenger, comment = NA, echo = FALSE}
+string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[11], 3), 
+                 ", a probability of pair dispersal of ", round(probs$pDispP[11], 3), 
+                 ", a probability of single male dispersal of ", round(probs$pDispM[11], 3), 
+                 ", and a probability of single female dispersal of ", round(probs$pDispF[11], 3))
+print(string)
+```
+Two of our dispersal probabilities were low and mate fidelity wasn't low either, which makes sense as to why there isn't a clear territory effect. 
+
+

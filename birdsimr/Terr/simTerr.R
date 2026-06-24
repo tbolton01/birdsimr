@@ -19,7 +19,6 @@ terrSim <- function(Nbird, maleRatio = 0.5, Nyr, avgLifespan = 3, propNew, # arg
   birdTerrY1 <- makeFledge(birdTerrY1, maxFledge)
   dfSim <- birdTerrY1
   for (i in 1:(Nyr - 1)) {
-    print(i)
     if (length(dfBird[dfBird$Yr == i + 1,]$Sex) == 0) {
       warning("No remaining birds to pull from. Could not complete simulation for 
       all requested years. Try upping the number of available birds.")
