@@ -1,0 +1,3629 @@
+---
+title: "Territory Analyses with Year as Factor"
+author: "Thomsen B. Bolton"
+date: "2026-06-29"
+output: pdf_document
+---
+
+```{r Frodo, comment = NA, echo = FALSE}
+library(ggplot2)
+library(tidyverse)
+library(glmmTMB)   
+library(mgcv)
+library(emmeans)
+library(DHARMa)
+library(vcd)
+#library(broom)
+library(broom.mixed)
+library(caret)
+library(ggfortify)
+library(effects)
+library(factoextra)
+library(gridExtra)
+library(corrplot)
+library(kableExtra)
+library(gratia)
+library(ggrepel)
+df_list <- list()
+probs <- read.csv("probs.csv", header = TRUE)
+for (i in 1:22) {
+  df<- read.csv(paste0("sim_", i, ".csv"), header = TRUE)
+  df <- filter(df, Sex == "F")
+  df$birdID=factor(df$birdID)
+  df$Sex=factor(df$Sex)
+  df$Terrs=factor(df$Terrs)
+  df$fac.yr=factor(df$Yr)
+  # Calculate z-scores within each year
+  df <- df %>%
+  group_by(fac.yr) %>%
+  mutate(
+    z_score = (Fledge - mean(Fledge, na.rm = TRUE)) / sd(Fledge, na.rm = TRUE)
+  ) %>%
+  ungroup()
+  df$Eggs <- ifelse(df$Fledge > 0, 1, 0)
+  
+  df_list[[i]] <- df
+}
+delta_aic_pois <- matrix(rep(0, 22 * 3), nrow = 22, ncol = 3)
+colnames(delta_aic_pois) <- c("BandID", "Terr", "BandID+Terr")
+delta_aic_gaus <- matrix(rep(0, 22 * 3), nrow = 22, ncol = 3)
+colnames(delta_aic_gaus) <- c("BandID", "Terr", "BandID+Terr")
+delta_aic_binom <- matrix(rep(0, 22 * 3), nrow = 22, ncol = 3)
+colnames(delta_aic_binom) <- c("BandID", "Terr", "BandID+Terr")
+```
+
+For this report, we generated 20 different simulated data sets varying probability of mate fidelity, a pair's territory fidelity, a single male's territory fidelity, and a single female's territory fidelity. Latin hypercube sampling (LHS) was used to generate these probabilities for the 20 different runs. In addition to to the 20 runs generated from the LHS, we also generated two simulated datasets, where probabilities were chosen to either show the territory effect, or to make the territory effect more difficult to detect. 
+
+Year is being modeled as a factor instead of with a smoother. The reason being for this is that we did try modelling year with both cyclic and cubic regression splines. However, edfs on the year smoother were large and the k-indices were often too small, meaning our basis dimension was inadequate. Since we only have 20 years in the dataset, we cannot get the adequate dimension for our basis. A year term is not included in the models with z-score as a response, as the construction of the z-score removes the year effect. 
+
+This report does not include diagnostic plots. However, a few of the models had diagnostics to warrant concern about the validity of model assumptions. Most of the residuals in the z-score models had a slight left skew, with a select few having a notable left skew. The z-score models should be interpreted a bit more cautiously. 
+
+The probability of fledgling were randomly drawn from a beta(14, (14/0.65 - 14)) distribution for good territories, a beta(9, (9/0.55 - 9)) distribution for mediocre territories, and a beta(14, (5/0.45 - 5)) distribution for bad territories. Note that maybe playing with priors could be interesting. I initially ran the simulation where priors were very different and the models seemed to have an easier time picking up on the territory effect. 
+
+
+
+# Simulation 1 
+
+## Number of fledgling as the response (Poisson)
+
+```{r Gandalf, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[1]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[1, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model performed best on AIC and had an adjusted $R^2$ of 20%, which is close to the best adjusted $R^2$ seen out of these three models. The band ID only model did perform the best on BIC. However, its adjusted $R^2$ was about half of the other 2 models adjusted $R^2$. In addition, the territory smoothers were the only significant smoothers
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Bilbo Baggins, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[1]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[1, ] <- delta_aic
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The model diagnostics on these three models were severe enough to warrant concern. The residuals seemed as though the left skew was more notable, and the residuals vs fitted plots seemed to funnel out. I would not recommened working with these models. 
+
+The QQ plot does suggest violation in the model assumptions. 
+
+## Eggs (Binomial)
+
+```{r Galadriel, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[1]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[1]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[1, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each of these models is the best on one of the 3 selection criteria. The smoothers in the models with only one random effect are significant. However, the model that includes both smoothers only saw significance with the territory smoother. 
+
+
+## Probabilites used to generate simulation 1
+
+```{r Elrond, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[1], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[1], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[1], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[1], 3)
+  )
+)
+```
+
+
+# Simulation 2
+
+## Number of fledgling as the response (Poisson)
+
+```{r Gollum, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[2]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[2, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model is performing the best on AIC, and has an adjusted $R^2$ close to the best adjusted $R^2$ seen out of these three models. The band ID only model is performing the best on BIC and its adjusted $R^2$ is a bit worse compared to the other two models. Both models that only included one random effect saw those random effects to be significant. However, the model fitting both random effects only saw the smoother for territory as significant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Rivendell, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[2]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[2, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The model fitting both random effects is performing the best on AIC and adjusted $R^2$. However, it is performing the worst on BIC, with the band ID only model performing the best on BIC. All smoothers were significant. 
+
+## Eggs (Binomial)
+
+```{r Thranduil, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[2]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[2]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[2, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The single random effects models are both performing similarly on the model selection criteria. The model fitting both random effects is performing poorly, comparatively, on AIC and BIC, but has an adjusted $R^2$ that is about 10% higher. all smoothers were significant, except for the band ID smoother in the model fitting both random effects. 
+
+## Probabilites used to generate simulation 2
+
+```{r Thorin, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 2\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[2], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[2], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[2], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[2], 3)
+  )
+)
+print(string)
+```
+
+
+# Simulation 3
+
+## Number of fledgling as the response (Poisson)
+
+```{r Samwise Gamgee, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[3]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[3, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each model performs the best on a different criteria. However, the criteria that the territory only model isn't the best on it is instead the second best. All smoothers were significant except for the smoother on band ID in the model fitting both random effects. 
+
+
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Morgoth, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[3]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[3, ] <- delta_aic
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+A similar response as the previous batch of models. 
+
+## Eggs (Binomial)
+
+```{r Balin, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[3]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[3]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[3, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+A similar response as for the previous batch of models. 
+
+## Probabilites used to generate simulation 3
+
+```{r Everard Proudfoot, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[3], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[3], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[3], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[3], 3)
+  )
+)
+print(string)
+```
+Here, we should notice the low mate fidelity rate and the fact that dispersal probabilities aren't terribly low.
+
+# Simulation 4
+
+## Number of fledgling as the response (Poisson)
+
+```{r Smeagol, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[4]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[4, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model is performing well on AIC and has an adjusted $R^2$ close to that of the highest adjusted $R^2$. The band ID only model has the lowest BIC. All smoothers are significant except for the band ID smoother in the model that fits both. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Eowyn, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[4]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[4, ] <- delta_aic
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+This time, the model fitting both random effects is performing the best on AIC and has the highest adjusted $R^2$, while the band ID only model had the lowest BIC. All smoothers were significant. 
+
+## Eggs (Binomial)
+
+```{r Minas Tirith, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[4]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[4]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[4, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+We notice that the territory only model is performing the best on AIC, the band ID model is performing the best on BIC, and the model fitting both random effects has a notably higher adjusted $R^2$. 
+
+## Probabilites used to generate simulation 4
+
+```{r Ori, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[4], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[4], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[4], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[4], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 5
+
+## Number of fledgling as the response (Poisson)
+
+```{r Sting, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[5]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[5, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model has the best AIC score and an adjusted $R^2$ comparable to the best adjusted $R^2$. The band ID only model has the best BIC score. All smooothers are significant, except for the band ID smoother that is present in the model fitting both random effects. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Mirkwood, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[5]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[5, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+I would say something similar as to what I said for the last batch of models with z-score as the response. 
+
+
+## Eggs (Binomial)
+
+```{r Gimili, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[5]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[5]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[5, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Interestingly enough, the band ID only model had the lowest AIC and BIC. However, it did also have the lowest adjusted $R^2$. All smoothers were significant. Note that the QQ plot for the model fitting both random effects may suggest model assumptions are not met. 
+
+
+## Probabilites used to generate simulation 5
+
+```{r Smaug, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[5], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[5], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[5], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[5], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 6
+
+## Number of fledgling as the response (Poisson)
+
+```{r Coruscant, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[6]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[6, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The band ID only model has the best AIC, the territory only model has the best BIC, and the model fitting both random effects has the highest adjusted $R^2$. The models are also performing somewhat similarly on the model selection criteria. All smoothers are significant. 
+
+
+
+## Z-score number of fledgling (Gaussian)
+```{r Fives, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[6]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[6, ] <- delta_aic
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The model fitting both random effects seems to perform the best on adjusted $R^2$ and AIC, but the worst on BIC, while the model only fitting territory as a random effect seems to perform well on BIC, but the worst on AIC and adjusted $R^2$. All smoothers were significant. 
+
+## Eggs (Binomial)
+
+```{r Yularen, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[6]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[6]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[6, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model has the best AIC, while the band ID only model has the best BIC. The QQ plot for the model fitting both random effects suggested the model assumptions were not met, so I would not consider using that model. The smoothers are significant in their respective models. 
+
+## Probabilites used to generate simulation 6
+
+```{r Jesse, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[6], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[6], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[6], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[6], 3)
+  )
+)
+print(string)
+```
+Once again, we had low a probability of single female dispersal and it was harder to distinguish the territory effect. 
+
+# Simulation 7
+
+## Number of fledgling as the response (Poisson)
+
+```{r Cassian Andor, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[7]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[7, ] <- delta_aic
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model and the model fitting both random effects are performing extremely similarly on the model selection criteria, having a better AIC and adjusted $R^2$ than the band ID only model. However, the band ID only model has a better BIC score. Only territory smoothers were significant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Bix Caleen, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[7]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[7, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+I would say something similar to what I said for the previous batch of models.  
+
+
+
+## Eggs (Binomial)
+
+```{r Brasso, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[7]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[7]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[7, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each model has a criteria where they are the best. All smoothers are significant except for the band ID smoother in the model fitting both random effects. 
+
+## Probabilites used to generate simulation 7
+
+```{r Melshi, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[7], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[7], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[7], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[7], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 8
+
+## Number of fledgling as the response (Poisson)
+
+```{r Sheev Palpatine, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[8]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[8, ] <- delta_aic
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model performs the best, barely, on AIC and the best on BIC. It does have the lowest adjusted $R^2$, but all adjusted $R^2$s are somewhat similar. None of the smoothers are significant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Imperial Senate, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[8]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[8, ] <- delta_aic
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+I would not consider the band ID only model here. When diagnostics were checked, model assumptions did not seem reasonable. The model fitting both random effects had the best AIC, the worst BIC, and the best adjusted $R^2$. All smoothers were significant except the smoother on territory in the model that fit both random effects. 
+
+## Eggs (Binomial)
+
+```{r Exegol, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[8]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[8]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3),  Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[8, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The band ID model had the best AIC, the territory only model has the best BIC, and the model fitting both random effects had the highest adjusted $R^2$. All smoothers were significant excpet for the territory smoother in the model that included both random effects. 
+
+
+## Probabilites used to generate simulation 8
+
+```{r Lighting, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[8], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[8], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[8], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[8], 3)
+  )
+)
+print(string)
+```
+
+
+# Simulation 9
+
+## Number of fledgling as the response (Poisson)
+
+```{r Jabba the Hutt, comment= NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[9]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[9, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each model has a criteria it performs the best in, but the territory only model does perform similarly as the best models in each of the criteria. All smoothers were significant, except for the band ID smoother in the model fitting both random effects. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Bib Fortuna, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[9]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[9, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The band ID only model performs the best on AIC (barely) and BIC. However, the model fitting both random effects has a higher adjusted $R^2$. All smoothers were significant. 
+
+## Eggs (Binomial)
+
+```{r Max Rebo, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[9]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[9]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[9, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each model has a criteria that they are performing best in, and all smoothers are significant, except for the territory smoother in the model fitted with both random effects. 
+
+
+
+## Probabilites used to generate simulation 9
+
+```{r Desert skiff, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[9], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[9], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[9], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[9], 3)
+  )
+)
+print(string)
+```
+
+
+# Simulation 10
+
+## Number of fledgling as the response (Poisson)
+
+```{r Han Solo, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[10]],method="REML",family=poisson)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[7]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[10, ] <- delta_aic
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each model had a criteria that they performed the best in. All smoothers were significant, except for the band ID smoother in the model with both random effects fitted. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Millenium Falcon, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[10]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[10, ] <- delta_aic
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The model fitting both random effects is performing the best on AIC and adjusted $R^2$, but the worst on BIC. All smoothers were significant. 
+
+## Eggs (Binomial)
+
+```{r Lando, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[10]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[10]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[10, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model has the best AIC and BIC scores, and the models fitting singular random effects have similar adjusted $R^2$s. The model fitting both random effects had a notably higher adjusted $R^2$, though the QQ plot for that model may be cause to be skeptical of that model. All smoothers are significant, except the band ID smoother in the model fitting both random effects. 
+
+## Probabilites used to generate simulation 10
+
+```{r Qira, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[10], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[10], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[10], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[10], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 11
+
+## Number of fledgling as the response (Poisson)
+
+```{r Rey, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[11]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[11, ] <- delta_aic
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Similar to what I said for the last batch of models. Diagnostics look reasonable, and all smoothers are significant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Jakku, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[11]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[11, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The model fitting both random effects has the highest adjusted $R^2$ and the best AIC score, but the worst BIC score, with the band ID only model having the best BIC score. All smoothers are significant. 
+
+## Eggs (Binomial)
+
+```{r Holdo, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[11]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[11]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[11, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+I am only going to compare the models fitting one random effect because the QQ plot for the model fitting both random effects suggests violations of the distributional assumptions. The territory only model has a better AIC score and a higher adjusted $R^2$, while the band ID only model has a lower BIC score. The smoothers are significant in their respective models. 
+
+## Probabilites used to generate simulation 11
+
+```{r Scavenger, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[11], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[11], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[11], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[11], 3)
+  )
+)
+print(string)
+```
+
+
+# Simulation 12
+
+## Number of fledgling as the response (Poisson)
+
+```{r Darth Maul, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[12]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[12, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model has the lowest AIC and performs close to the best model in each criteria. The territory smoothers are the only significant smoothers. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Merrin, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[12]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[12, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The band ID only model assumptions did not seem reasonable, so I will not include it in the comparisons. The territory only model has the best AIC and BIC scores out of the models we are considering, but a lower adjusted $R^2$. All smoothers are significant. 
+
+## Eggs (Binomial)
+
+```{r Crimson Dawn, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[12]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[12]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[1, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each model has a criteria that they perform the best in and the only smoother that is insiginificant is the band ID smoother in the model that includes both random effects. 
+
+## Probabilites used to generate simulation 12
+
+```{r Pre Vizsla, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[12], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[12], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[12], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[12], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 13
+
+## Number of fledgling as the response (Poisson)
+
+```{r Luke Skywalker, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[13]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[13, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Similar response as for the previous batch of models. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Dagobah, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[13]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[13, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The model fitting both random effects has the best AIC and best adjusted $R^2$. However, it does have the worst BIC, with the band ID only model having the best BIC. All smoothers are significant. 
+
+
+
+## Eggs (Binomial)
+
+```{r Yoda, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[13]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[13]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[13, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The model fitting both random effects has an adjusted $R^2$ that is nearly 20% higher and the lowest AIC score. However, the BIC score is the worst and the QQ plot may cause some concern. All smoothers are significant. 
+
+## Probabilites used to generate simulation 13
+
+```{r Red 5, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[13], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[13], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[13], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[13], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 14
+
+## Number of fledgling as the response (Poisson)
+
+```{r Count Dooku, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[14]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[14, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The models with territory as a random effect are performing roughly identically on the model selection criteria. The band ID only model does have the best BIC score, but none of the band ID smoothers are significant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Wat Tambor, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[14]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[14, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Similar for the previous batch of models. In addition to that the QQ plot for the band ID only model does perhaps suggest that model assumptions do not seem reasonable. 
+
+## Eggs (Binomial)
+
+```{r Ventress, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[14]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[14]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[14, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each model has a criteria in which they are performing the best in. All smoothers are significant, excpet for the band ID smoother in the model fitting both random effects. 
+
+## Probabilites used to generate simulation 14
+
+```{r Geonosis, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[14], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[14], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[14], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[14], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 15
+
+## Number of fledgling as the response (Poisson)
+
+```{r Mon Mothma, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[15]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[15, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Similar to the previous batch of models. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Biggs, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                           s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[15]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[15, ] <- delta_aic
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Similar to the previous batch of models, except the QQ plot suggests a strong left skew in the residuals for the band ID only model, so I would be more hesitant to trust that model. 
+
+## Eggs (Binomial)
+
+```{r Raddus, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[15]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[15]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[15, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The QQ plot for the model fitting both random effects suggests violations of distributional assumptions. I will only compare the models with one random effect. The territory only model has the best AIC and adjusted $R^2$, while the band ID only model has the best BIC. All smoothers were significant. 
+
+## Probabilites used to generate simulation 15
+
+```{r Y-wing, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[15], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[15], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[15], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[15], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 16
+
+## Number of fledgling as the response (Poisson)
+
+```{r Darth Vader, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[16]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[16, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+All models performed roughly the same on AIC, but the band ID only model performed well on BIC, but the worst on adjusted $R^2$, with the other two models having roughly the same adjusted $R^2$. Only territory smoothers were signficant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Tarkin, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                           s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[16]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[16, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The band ID only model's QQ plot suggested a strong left skew in the residuals, so I will only compare the model fitting both random effects and the territory only model. The model fitting both random effects has the best AIC and adjusted $R^2$, while the territory only model has the best BIC. All smoothers are signficiant. 
+
+## Eggs (Binomial)
+
+```{r Devastator, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[16]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[7]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[16, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The QQ plot for the model fitting both random effects suggests violations of distributional assumptions. I will only compare the models with one random effect. The territory only model has the best AIC and adjusted $R^2$, while the band ID only model has the best BIC. All smoothers were significant. 
+
+## Probabilites used to generate simulation 16
+
+```{r Mustafar, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[16], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[16], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[16], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[16], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 17
+
+## Number of fledgling as the response (Poisson)
+
+```{r TESB, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[17]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[17, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The band ID only model had the best AIC and BIC scores, while the other 2 models performed roughly the same on the model selection criteria. Only territory smoothers were significant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r TFA, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                           s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[17]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[17, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Each model has a criteria that they are performing well on and only territory smoothers are significant. 
+
+
+## Eggs (Binomial)
+
+```{r Solo, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[17]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[7]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[17, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The model fitting both random effects is clearly overfitting since there is no deviance and an adjusted $R^2$ of 1, so we will not consider it. The territory only model seems be performing the best on adjusted $R^2$ and AIC, while the band ID only model is performing the best on BIC. Only the territory smoother is significant. 
+
+## Probabilites used to generate simulation 17
+
+```{r Mando, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[17], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[17], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[17], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[17], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 18
+
+## Number of fledgling as the response (Poisson)
+
+```{r 1, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[18]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[18, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model has the best AIC and BIC, but the worst adjusted $R^2$. However its adjusted $R^2$ is only 2% lower than the best adjusted $R^2$ seen in this batch of models. No smoother is significant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r 4, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[18]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[18, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Each model has a criteria that they are performing the best on, but none of them are performing well. No smoothers are significant. 
+
+## Eggs (Binomial)
+
+```{r 7, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[18]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[18]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[18, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Honestly, model selection here is a bit of a tossup.  
+
+The QQ plot for the model fitting both random effects suggests violations of distributional assumptions. I will only compare the models with one random effect. The territory only model has the best AIC and adjusted $R^2$, while the band ID only model has the best BIC. Only the smoothers in models with a single random effect are significant. 
+
+## Probabilites used to generate simulation 18
+
+```{r 10, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[18], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[18], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[18], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[18], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 19
+
+## Number of fledgling as the response (Poisson)
+
+```{r Abbey Road, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[19]],method="REML",family=poisson)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[7]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[19, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The models with only one random effect are performing similarly, with the band ID only model just performing slightly better. The model with both random effects performs the best on adjusted $R^2$, but the worst on the other two criteria. No smoothers were significant. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Revolver, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[19]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[19, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The model fitting both random effects has the best AIC and adjusted $R^2$, while the band ID only model has the best BIC score. All smoothers are significant. 
+
+## Eggs (Binomial)
+
+```{r Hard Days Night, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[19]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[19]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[19, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Each model has a criteria that they are performing the best in. Only models with one random effect has significant smoothers. 
+
+## Probabilites used to generate simulation 19
+
+```{r Please Please Me, comment = NA, echo = FALSE}
+string <- paste0("This dataset was generated with a probability of mate fidelity of ", round(probs$pFidel[19], 3), 
+                 ", a probability of pair dispersal of ", round(probs$pDispP[19], 3), 
+                 ", a probability of single male dispersal of ", round(probs$pDispM[19], 3), 
+                 ", and a probability of single female dispersal of ", round(probs$pDispF[19], 3))
+print(string)
+```
+
+# Simulation 20
+
+## Number of fledgling as the response (Poisson)
+
+```{r red, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[20]],method="REML",family=poisson)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[20]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[20, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only and both random effects models performed nearly identically on the selection criteria. Having the best AIC and adjusted $R^2$s. However, the band ID only model had the best BIC. All smoothers are significant, except for the band ID smoother in the model fitting both random effects. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r green, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[20]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[20, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Each model has a criteria that they are performing well in. The band ID smoother in the model fitting both random effects is not significant. 
+
+## Eggs (Binomial)
+
+```{r blue, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[20]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[7]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[20, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Similar to the batch of models before. 
+
+## Probabilites used to generate simulation 20
+
+```{r brown, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[20], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[20], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[20], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[20], 3)
+  )
+)
+print(string)
+```
+
+# Simulation 21
+
+## Number of fledgling as the response (Poisson)
+
+```{r Rancor, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[21]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[21, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The territory only model performs very similarly to the model fitting both random effects on the selection criteria. Having the best AIC and roughly the best adjusted $R^2$, but the band ID only model has the best BIC. However, none of the band ID smoothers are significant, and the edf is close to 0 for the band ID smoother in the model with both random effects, suggesting that it is being shrunk out of the model. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Krayt dragon, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[21]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[21, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+Each model has a criteria that they are performing well on, but the band ID smoother in the model with both random effects was insignificant.
+
+## Eggs (Binomial)
+
+```{r Colo clawfish, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[21]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[7]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[21, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Similar to the previous batch of models. 
+
+## Probabilites used to generate simulation 21
+
+```{r Nexu, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[21], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[21], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[21], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[21], 3)
+  )
+)
+print(string)
+```
+
+This run was designed to allow for the territory effect to be present. 
+
+# Simulation 22
+
+## Number of fledgling as the response (Poisson)
+
+```{r Kylo Ren, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Fledge~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Fledge~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Fledge~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+pois.summary.results=list()
+pois.smooth.results=list()
+pois.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[22]],method="REML",family=poisson)
+  models[[i]] <- mod
+  # gather results & add labels
+  pois.summary.results[[i]]=glance(mod) %>% add_column(dev.expl = summary(mod)$dev.expl, Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  pois.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Poisson",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(pois.summary.results[[1]]$AIC, pois.summary.results[[2]]$AIC, 
+             pois.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_pois[22, ] <- delta_aic
+
+pois.summary.tbl=do.call('rbind',pois.summary.results) %>% arrange(AIC)
+pois.smooth.tbl=do.call('rbind',pois.smooth.results)
+pois.fixed.tbl=do.call('rbind',pois.fixed.results)
+
+kable(pois.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(pois.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(pois.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+Overall, I wouldn't say there's a clear superior model when considering multiple selection criteria. All smoothers are significant except for the territory smoother in the model that included both random effects. 
+
+## Z-score number of fledgling (Gaussian)
+
+```{r Finalizer, comment = NA ,echo = FALSE}
+form.list=list(as.formula(z_score~
+                            s(birdID,bs="re")),
+               
+               as.formula(z_score~
+                            s(Terrs,bs="re")),
+               
+               as.formula(z_score~
+                            s(birdID,bs="re")+s(Terrs,bs="re")))
+
+z.summary.results=list()
+z.smooth.results=list()
+z.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[22]],method="REML")
+  models[[i]] <- mod
+  # gather results & add labels
+  z.summary.results[[i]]=glance(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+  z.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Gaussian",RE=ifelse(i==1,"BandID",ifelse(i==2,"Terr","BandID+Terr")))
+}
+
+aic_vec <- c(z.summary.results[[1]]$AIC, z.summary.results[[2]]$AIC, 
+             z.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_gaus[22, ] <- delta_aic
+
+
+z.summary.tbl=do.call('rbind',z.summary.results) %>% arrange(AIC)
+z.smooth.tbl=do.call('rbind',z.smooth.results)
+z.fixed.tbl=do.call('rbind',z.fixed.results)
+
+kable(z.summary.tbl,caption="Z-score GAMMs summary table.")
+kable(z.smooth.tbl,caption="Z-score GAMMs smooth terms table.")
+kable(z.fixed.tbl,caption="Z-score GAMMs linear terms table.")
+
+```
+
+The model fitting both random effects had the best AIC and adjusted $R^2$, where the territory only model had the best BIC. No smoother was significant. 
+
+## Eggs (Binomial)
+
+```{r TIE silencer, comment = NA, echo = FALSE}
+
+form.list=list(as.formula(Eggs~
+                          # this is what can be switched up
+                            factor(fac.yr)+s(birdID,bs="re")),
+               
+                as.formula(Eggs~
+                          # this is what can be switched up 
+                            factor(fac.yr)+s(Terrs,bs="re")),
+               
+                as.formula(Eggs~
+                             factor(fac.yr)+s(birdID,bs="re")+s(Terrs,bs="re")))
+
+binom.summary.results=list()
+binom.smooth.results=list()
+binom.fixed.results=list()
+models <- list()
+for(i in 1:length(form.list)){
+  # fit model
+  mod=gam(form.list[[i]],data=df_list[[22]],method="REML",family=binomial)
+  models[[i]] <- mod
+  pred_prob <- predict(mod, type = "response")  # includes RE by default
+
+  # Classify predictions into successes and failures
+  pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+  obs_class <- df_list[[7]]$Eggs  
+  
+  # Build confusion matrix and compute kappa
+  tab <- table(Predicted = pred_class, Observed = obs_class)
+  print(Kappa(tab))
+  # gather results & add labels
+  binom.summary.results[[i]]=glance(mod) %>% add_column(Kappa = round(Kappa(tab)$Unweighted[1], 3), Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.smooth.results[[i]]=tidy(mod) %>% add_column(Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+  binom.fixed.results[[i]]=cbind.data.frame(summary(mod)$p.table,Family="Binomial",RE=ifelse(i==1,"BirdID",ifelse(i==2,"Terr","BirdID+Terr")))
+}
+
+aic_vec <- c(binom.summary.results[[1]]$AIC, binom.summary.results[[2]]$AIC, 
+             binom.summary.results[[3]]$AIC)
+delta_aic <- aic_vec - min(aic_vec)
+delta_aic_binom[22, ] <- delta_aic
+
+binom.summary.tbl=do.call('rbind',binom.summary.results) %>% arrange(AIC)
+binom.smooth.tbl=do.call('rbind',binom.smooth.results)
+binom.fixed.tbl=do.call('rbind',binom.fixed.results)
+
+kable(binom.summary.tbl,caption="No. fledge GAMMs summary table.")
+kable(binom.smooth.tbl,caption="No. fledge GAMMs smooth terms table.")
+kable(binom.fixed.tbl,caption="No. fledge GAMMs linear terms table.")
+```
+
+The band ID only model had the best AIC and BIC, and the the model with both random effects had the best adjusted $R^2$. All smoothers were significant, except for the territory smoother in the model that fit both random effects. 
+
+## Probabilites used to generate simulation 22
+
+```{r Supremacy, comment = NA, echo = FALSE}
+string <- cat(
+  paste0(
+    "Simulation 1\n",
+    "Probability of mate fidelity: ", round(probs$pFidel[22], 3), "\n",
+    "Probability of pair dispersal: ", round(probs$pDispP[22], 3), "\n",
+    "Probability of single male dispersal: ", round(probs$pDispM[22], 3), "\n",
+    "Probability of single female dispersal: ", round(probs$pDispF[22], 3)
+  )
+)
+print(string)
+```
+
+This run was generated to make it difficult to detect the territory effect. 
+
+
+
+
+
+
+
+
+
+
+
+
