@@ -44,11 +44,11 @@ for (i in 1:22) {
   
   df_list[[i]] <- df
 }
-delta_aic_pois <- matrix(rep(0, 22 * 3), nrow = 22, ncol = 3)
+delta_aic_pois <- matrix(rep(0, 52 * 3), nrow = 52, ncol = 3)
 colnames(delta_aic_pois) <- c("BandID", "Terr", "BandID+Terr")
-delta_aic_gaus <- matrix(rep(0, 22 * 3), nrow = 22, ncol = 3)
+delta_aic_gaus <- matrix(rep(0, 52 * 3), nrow = 52, ncol = 3)
 colnames(delta_aic_gaus) <- c("BandID", "Terr", "BandID+Terr")
-delta_aic_binom <- matrix(rep(0, 22 * 3), nrow = 22, ncol = 3)
+delta_aic_binom <- matrix(rep(0, 52 * 3), nrow = 52, ncol = 3)
 colnames(delta_aic_binom) <- c("BandID", "Terr", "BandID+Terr")
 ```
 

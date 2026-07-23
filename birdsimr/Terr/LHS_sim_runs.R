@@ -1,7 +1,7 @@
 library(lhs)
 source("simTerr.R")
 set.seed(2187)
-p_mat <- randomLHS(20, 4)
+p_mat <- randomLHS(50, 4)
 #territory effect should clearly be present on this run
 p_high <- c(0.1, 0.90, 0.95, 0.95)
 #territory effect should be a bit more unclear on this run

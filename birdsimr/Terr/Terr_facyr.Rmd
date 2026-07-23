@@ -25,7 +25,7 @@ library(gratia)
 library(ggrepel)
 df_list <- list()
 probs <- read.csv("probs.csv", header = TRUE)
-for (i in 1:22) {
+for (i in 1:52) {
   df<- read.csv(paste0("sim_", i, ".csv"), header = TRUE)
   df <- filter(df, Sex == "F")
   df$birdID=factor(df$birdID)
